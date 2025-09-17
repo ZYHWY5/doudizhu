@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen;
+  }
+}
+
+@layer components {
+  /* 按钮样式 */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 shadow-md hover:shadow-lg;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
+  }
+  
+  .btn-success {
+    @apply btn bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
+  }
+  
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+  }
+  
+  .btn-lg {
+    @apply px-6 py-3 text-lg;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  /* 卡片样式 */
+  .card {
+    @apply bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden;
+  }
+  
+  .card-body {
+    @apply p-6;
+  }
+  
+  .card-header {
+    @apply px-6 py-4 bg-gray-50 border-b border-gray-200;
+  }
+  
+  /* 输入框样式 */
+  .input {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors;
+  }
+  
+  /* 游戏相关样式 */
+  .playing-card {
+    @apply relative w-12 h-16 bg-white border border-gray-300 rounded-lg shadow-sm cursor-pointer transition-all duration-200;
+  }
+  
+  .playing-card:hover {
+    @apply transform -translate-y-2 shadow-md;
+  }
+  
+  .playing-card.selected {
+    @apply transform -translate-y-3 shadow-lg ring-2 ring-primary-500;
+  }
+  
+  .playing-card.disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+  
+  .game-table {
+    @apply relative bg-gradient-to-br from-green-700 to-green-800 rounded-2xl shadow-2xl;
+  }
+  
+  .player-area {
+    @apply absolute flex items-center justify-center;
+  }
+  
+  /* 网络状态指示器 */
+  .network-indicator {
+    @apply flex items-center space-x-1;
+  }
+  
+  .signal-bar {
+    @apply w-1 bg-gray-300 rounded-full;
+  }
+  
+  .signal-bar.active {
+    @apply bg-green-500;
+  }
+  
+  .signal-bar:nth-child(1) { height: 4px; }
+  .signal-bar:nth-child(2) { height: 8px; }
+  .signal-bar:nth-child(3) { height: 12px; }
+  .signal-bar:nth-child(4) { height: 16px; }
+  
+  /* 动画效果 */
+  .card-deal-animation {
+    animation: cardDeal 0.8s ease-out forwards;
+  }
+  
+  .card-flip-animation {
+    animation: cardFlip 0.6s ease-in-out;
+  }
+  
+  .fade-in-animation {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  /* 响应式游戏布局 */
+  .game-container {
+    @apply relative w-full h-screen overflow-hidden;
+  }
+  
+  @media (max-width: 768px) {
+    .game-container {
+      @apply p-2;
+    }
+    
+    .playing-card {
+      @apply w-8 h-12;
+    }
+  }
+  
+  /* 房间码样式 */
+  .room-code {
+    @apply font-mono text-2xl font-bold tracking-wider bg-gray-100 px-4 py-2 rounded-lg border-2 border-dashed border-gray-300;
+  }
+  
+  /* 玩家状态 */
+  .player-status {
+    @apply flex items-center space-x-2 px-3 py-2 rounded-full text-sm font-medium;
+  }
+  
+  .player-status.ready {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .player-status.waiting {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .player-status.offline {
+    @apply bg-gray-100 text-gray-600;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .text-shadow-lg {
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.2);
+  }
+  
+  .glass-effect {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
