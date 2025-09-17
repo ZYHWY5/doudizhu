@@ -1,0 +1,45 @@
+{
+  "name": "斗地主网游",
+  "short_name": "斗地主",
+  "description": "轻量化斗地主网游，支持AI对战和好友联机",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "scope": "/",
+  "lang": "zh-CN",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI对战",
+      "short_name": "AI",
+      "description": "与AI进行斗地主对战",
+      "url": "/?mode=ai"
+    },
+    {
+      "name": "创建房间",
+      "short_name": "创建",
+      "description": "创建房间与朋友联机",
+      "url": "/?action=create"
+    },
+    {
+      "name": "加入房间",
+      "short_name": "加入",
+      "description": "输入房间码加入游戏",
+      "url": "/?action=join"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}

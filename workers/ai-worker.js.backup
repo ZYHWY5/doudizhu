@@ -1,0 +1,245 @@
+// AI Worker - 简化版JavaScript实现
+
+// AI难度配置
+const AI_DIFFICULTY = {
+  easy: { thinkTime: 500, errorRate: 0.3, strategy: 'random' },
+  normal: { thinkTime: 1000, errorRate: 0.15, strategy: 'basic' },
+  hard: { thinkTime: 1500, errorRate: 0.05, strategy: 'advanced' }
+}
+
+let currentDifficulty = 'normal'
+
+// 简化的AI引擎
+class SimpleAIEngine {
+  constructor(difficulty = 'normal') {
+    this.difficulty = AI_DIFFICULTY[difficulty] || AI_DIFFICULTY.normal
+    currentDifficulty = difficulty
+  }
+
+  // 叫地主决策
+  async calculateBid(hand, currentBid) {
+    // 模拟思考时间
+    await this.sleep(this.difficulty.thinkTime)
+
+    // 简单的手牌强度计算
+    const strength = this.calculateHandStrength(hand)
+    
+    // 根据强度和当前叫分决定
+    if (currentDifficulty === 'easy') {
+      // 简单AI - 随机决策
+      return Math.random() < 0.4 ? (currentBid + 1 > 3 ? 'pass' : currentBid + 1) : 'pass'
+    } else if (currentDifficulty === 'normal') {
+      // 普通AI - 基于手牌强度
+      if (strength > 60 && currentBid < 2) return currentBid + 1
+      if (strength > 80 && currentBid < 3) return currentBid + 1
+      return 'pass'
+    } else {
+      // 困难AI - 更智能的决策
+      if (strength > 50 && currentBid < 1) return 1
+      if (strength > 70 && currentBid < 2) return 2
+      if (strength > 85 && currentBid < 3) return 3
+      return 'pass'
+    }
+  }
+
+  // 出牌决策
+  async calculateMove(hand, lastPlayedCards, playHistory) {
+    // 模拟思考时间
+    await this.sleep(this.difficulty.thinkTime)
+
+    // 如果是首家出牌
+    if (!lastPlayedCards || lastPlayedCards.length === 0) {
+      return this.chooseFirstPlay(hand)
+    }
+
+    // 尝试找到能出的牌
+    const playableCards = this.findPlayableCards(hand, lastPlayedCards)
+    
+    if (playableCards.length === 0) {
+      return { action: 'pass' }
+    }
+
+    // 选择出牌策略
+    const selectedCards = this.selectBestPlay(playableCards, hand)
+    
+    return {
+      action: 'play',
+      cards: selectedCards
+    }
+  }
+
+  // 计算手牌强度
+  calculateHandStrength(hand) {
+    let strength = 0
+    
+    // 统计各种牌型
+    const rankCounts = {}
+    hand.forEach(card => {
+      const rank = card.rank
+      rankCounts[rank] = (rankCounts[rank] || 0) + 1
+    })
+    
+    // 炸弹加分
+    Object.values(rankCounts).forEach(count => {
+      if (count === 4) strength += 25 // 炸弹
+      else if (count === 3) strength += 10 // 三张
+      else if (count === 2) strength += 5 // 对子
+    })
+    
+    // 大牌加分
+    hand.forEach(card => {
+      if (card.rank === '2') strength += 8
+      else if (card.rank === 'A') strength += 6
+      else if (card.rank === 'K') strength += 4
+      else if (card.rank === 'JOKER_RED' || card.rank === 'JOKER_BLACK') strength += 15
+    })
+    
+    return Math.min(100, strength)
+  }
+
+  // 选择首家出牌
+  chooseFirstPlay(hand) {
+    // 简单策略：出最小的单牌
+    const sortedHand = [...hand].sort((a, b) => (a.value || 0) - (b.value || 0))
+    
+    // 先尝试出单牌
+    if (sortedHand.length > 0) {
+      return {
+        action: 'play',
+        cards: [sortedHand[0]]
+      }
+    }
+    
+    return { action: 'pass' }
+  }
+
+  // 查找可出的牌
+  findPlayableCards(hand, lastPlayedCards) {
+    const playableOptions = []
+    
+    // 简化：只处理单牌和对子
+    if (lastPlayedCards.length === 1) {
+      // 出单牌
+      const lastValue = lastPlayedCards[0].value || 0
+      hand.forEach((card, index) => {
+        if ((card.value || 0) > lastValue) {
+          playableOptions.push([card])
+        }
+      })
+    } else if (lastPlayedCards.length === 2) {
+      // 出对子 - 简化实现
+      const rankCounts = {}
+      hand.forEach((card, index) => {
+        const rank = card.rank
+        if (!rankCounts[rank]) rankCounts[rank] = []
+        rankCounts[rank].push(card)
+      })
+      
+      const lastValue = lastPlayedCards[0].value || 0
+      Object.values(rankCounts).forEach(cards => {
+        if (cards.length >= 2 && (cards[0].value || 0) > lastValue) {
+          playableOptions.push(cards.slice(0, 2))
+        }
+      })
+    }
+    
+    // 炸弹总是可以出
+    const rankCounts = {}
+    hand.forEach(card => {
+      const rank = card.rank
+      if (!rankCounts[rank]) rankCounts[rank] = []
+      rankCounts[rank].push(card)
+    })
+    
+    Object.values(rankCounts).forEach(cards => {
+      if (cards.length === 4) {
+        playableOptions.push(cards)
+      }
+    })
+    
+    return playableOptions
+  }
+
+  // 选择最佳出牌
+  selectBestPlay(playableOptions, hand) {
+    if (playableOptions.length === 0) return []
+    
+    // 简单策略：选择最小的可出牌
+    return playableOptions.reduce((best, current) => {
+      const bestValue = Math.min(...best.map(c => c.value || 0))
+      const currentValue = Math.min(...current.map(c => c.value || 0))
+      return currentValue < bestValue ? current : best
+    })
+  }
+
+  // 延迟函数
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+}
+
+// 全局AI引擎实例
+let aiEngine = null
+
+// Worker消息处理
+self.onmessage = async (event) => {
+  const { type, data, requestId } = event.data
+  
+  try {
+    let response
+    
+    switch (type) {
+      case 'INIT_AI':
+        aiEngine = new SimpleAIEngine(data.difficulty)
+        response = {
+          type: 'INIT_RESULT',
+          data: { success: true },
+          requestId
+        }
+        break
+        
+      case 'CALCULATE_BID':
+        if (!aiEngine) {
+          throw new Error('AI引擎未初始化')
+        }
+        const bidResult = await aiEngine.calculateBid(data.hand, data.currentBid)
+        response = {
+          type: 'BID_RESULT',
+          data: { bid: bidResult },
+          requestId
+        }
+        break
+        
+      case 'CALCULATE_MOVE':
+        if (!aiEngine) {
+          throw new Error('AI引擎未初始化')
+        }
+        const moveResult = await aiEngine.calculateMove(
+          data.hand, 
+          data.lastPlayedCards, 
+          data.playHistory
+        )
+        response = {
+          type: 'MOVE_RESULT',
+          data: moveResult,
+          requestId
+        }
+        break
+        
+      default:
+        throw new Error(`未知消息类型: ${type}`)
+    }
+    
+    self.postMessage(response)
+    
+  } catch (error) {
+    const errorResponse = {
+      type: 'ERROR',
+      data: { error: error.message },
+      requestId
+    }
+    self.postMessage(errorResponse)
+  }
+}
+
+console.log('AI Worker 已加载')
