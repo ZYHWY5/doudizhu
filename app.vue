@@ -35,7 +35,7 @@
 // 全局状态
 const { $router } = useNuxtApp()
 const gameStore = useGameStore()
-const networkStore = useNetworkStore()
+// const networkStore = useNetworkStore() // 已移除联机功能
 
 // 页面标题
 const pageTitle = computed(() => {
@@ -56,7 +56,7 @@ const pageTitle = computed(() => {
 
 // 全局加载状态
 const isLoading = computed(() => {
-  return gameStore.isLoading || networkStore.isConnecting
+  return gameStore.isLoading // 单机模式，只检查游戏加载状态
 })
 
 // 页面生命周期
@@ -93,8 +93,8 @@ const initializeApp = async () => {
 
 // 清理应用
 const cleanupApp = () => {
-  // 断开网络连接
-  networkStore.disconnect()
+  // 单机模式，无需断开网络连接
+  console.log('清理应用资源')
   
   // TODO: 继续未完成对局功能待完善
   // gameStore.saveGameState()
@@ -112,16 +112,14 @@ watch(() => $router.currentRoute.value, (to, from) => {
   }
 })
 
-// 监听网络状态变化
-watch(() => networkStore.status, (status) => {
-  if (status === 'disconnected') {
-    // 网络断开时的处理
-    gameStore.handleNetworkDisconnection()
-  } else if (status === 'connected') {
-    // 网络重连时的处理
-    gameStore.handleNetworkReconnection()
-  }
-})
+// 单机模式，无需监听网络状态
+// watch(() => networkStore.status, (status) => {
+//   if (status === 'disconnected') {
+//     gameStore.handleNetworkDisconnection()
+//   } else if (status === 'connected') {
+//     gameStore.handleNetworkReconnection()
+//   }
+// })
 
 // 监听页面可见性变化（使用浏览器原生API）
 onMounted(() => {

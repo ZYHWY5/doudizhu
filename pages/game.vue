@@ -142,8 +142,8 @@ definePageMeta({
 
 // 状态管理
 const gameStore = useGameStore()
-const roomStore = useRoomStore()
-const networkStore = useNetworkStore()
+// const roomStore = useRoomStore() // 已移除联机功能
+// const networkStore = useNetworkStore() // 已移除联机功能
 
 // 响应式数据
 const showSettingsPanel = ref(false)
@@ -176,11 +176,11 @@ const suggestedCards = computed(() => gameStore.suggestedCards)
 const canDouble = computed(() => gameStore.canPlayerDouble(gameStore.playerId))
 const multiplierInfo = computed(() => gameStore.multiplierInfo)
 
-// 网络状态
-const networkStatus = computed(() => networkStore.status)
-const networkLatency = computed(() => networkStore.latency)
-const networkQuality = computed(() => networkStore.quality)
-const connectionType = computed(() => networkStore.connectionType)
+// 单机模式，无需网络状态
+// const networkStatus = computed(() => networkStore.status)
+// const networkLatency = computed(() => networkStore.latency)  
+// const networkQuality = computed(() => networkStore.quality)
+// const connectionType = computed(() => networkStore.connectionType)
 
 // 调试：监控地主状态变化
 watch([landlord, () => gameStore.playerId], ([newLandlord, newPlayerId]) => {
@@ -408,8 +408,8 @@ onMounted(async () => {
     // 监听键盘事件
     window.addEventListener('keydown', handleKeydown)
     
-    // 开始网络监控
-    networkStore.startMonitoring()
+    // 单机模式，无需网络监控
+    // networkStore.startMonitoring()
     
     console.log('游戏界面初始化完成')
   } catch (error) {
@@ -425,8 +425,8 @@ onBeforeUnmount(() => {
   // 停止游戏循环
   gameStore.stopGameLoop()
   
-  // 停止网络监控
-  networkStore.stopMonitoring()
+  // 单机模式，无需停止网络监控
+  // networkStore.stopMonitoring()
   
   // TODO: 继续未完成对局功能待完善
   // gameStore.saveGameState()
@@ -442,14 +442,14 @@ watch(() => gameStore.gamePhase, (newPhase) => {
   }
 })
 
-// 监听网络断开
-watch(() => networkStore.status, (status) => {
-  if (status === 'disconnected') {
-    gameStore.handleNetworkDisconnection()
-  } else if (status === 'connected') {
-    gameStore.handleNetworkReconnection()
-  }
-})
+// 单机模式，无需监听网络状态
+// watch(() => networkStore.status, (status) => {
+//   if (status === 'disconnected') {
+//     gameStore.handleNetworkDisconnection()
+//   } else if (status === 'connected') {
+//     gameStore.handleNetworkReconnection()
+//   }
+// })
 
 // 监听页面可见性
 onMounted(() => {

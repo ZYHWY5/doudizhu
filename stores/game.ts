@@ -384,19 +384,8 @@ export const useGameStore = defineStore('game', () => {
   }
 
   const syncPlayerNameToRoom = async (newName: string) => {
-    try {
-      const roomStore = useRoomStore()
-      await roomStore.syncPlayerNameChange(newName)
-      console.log('同步玩家名称到房间成功:', newName)
-    } catch (error) {
-      console.error('同步玩家名称到房间失败:', error)
-      // 显示错误通知但不影响本地名称更新
-      showNotification({
-        type: 'warning',
-        title: '同步失败',
-        message: '名称已在本地更新，但未能同步到其他玩家'
-      })
-    }
+    // 单机模式，无需同步到房间
+    console.log('单机模式，玩家名称已更新:', newName)
   }
 
   const generatePlayerId = (): string => {

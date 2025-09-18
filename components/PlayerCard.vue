@@ -69,7 +69,15 @@
 </template>
 
 <script setup lang="ts">
-import type { RoomPlayer } from '~/stores/room'
+// import type { RoomPlayer } from '~/stores/room' // 已移除联机功能
+
+interface RoomPlayer {
+  id: string
+  name: string
+  isReady: boolean
+  isHost: boolean
+  avatar?: string
+}
 
 interface Props {
   player: RoomPlayer
