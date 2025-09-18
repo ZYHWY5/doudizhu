@@ -70,9 +70,17 @@ export class SimpleSignalingService {
 
   // 生成房间分享链接
   generateRoomLink(roomInfo: RoomInfo): string {
-    const baseUrl = typeof window !== 'undefined' 
-      ? `${window.location.protocol}//${window.location.host}${window.location.pathname}`
-      : 'https://zyhwy5.github.io/doudizhu/'
+    // 强制使用 GitHub Pages 地址，确保跨设备可访问
+    let baseUrl = 'https://zyhwy5.github.io/doudizhu/'
+    
+    // 在开发环境中，如果不是localhost，则使用当前地址
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.host
+      // 只有在非localhost环境下才使用当前地址
+      if (!currentHost.includes('localhost') && !currentHost.includes('127.0.0.1')) {
+        baseUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`
+      }
+    }
     
     const params = new URLSearchParams({
       join: roomInfo.roomCode,
