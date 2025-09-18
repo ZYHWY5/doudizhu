@@ -103,6 +103,9 @@
 </template>
 
 <script setup lang="ts">
+// 静态导入
+import { parseRoomFromUrl, generateRoomLink } from '~/utils/simpleSignaling'
+
 // 响应式数据
 const currentUrl = ref('')
 const currentHash = ref('')
@@ -125,7 +128,6 @@ onMounted(async () => {
 
   // 测试URL解析
   try {
-    const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
     parseResult.value = parseRoomFromUrl()
   } catch (error) {
     console.error('解析失败:', error)
@@ -140,7 +142,6 @@ onMounted(async () => {
 // 生成测试链接
 const generateTestLink = async () => {
   try {
-    const { generateRoomLink } = await import('~/utils/simpleSignaling')
     const roomInfo = {
       roomCode: 'TEST01',
       hostPeerId: 'test-host-123',

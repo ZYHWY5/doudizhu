@@ -312,6 +312,9 @@
 </template>
 
 <script setup lang="ts">
+// 静态导入
+import { parseRoomFromUrl, generateRoomLink } from '~/utils/simpleSignaling'
+
 // 页面参数
 const route = useRoute()
 const roomCode = route.params.code as string
@@ -539,7 +542,6 @@ onMounted(async () => {
   
   try {
     // 检查是否通过分享链接访问
-    const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
     const urlRoomInfo = parseRoomFromUrl()
     
     if (urlRoomInfo) {
@@ -625,9 +627,8 @@ onMounted(() => {
 })
 
 // 生成房间分享链接
-const generateRoomLink = async () => {
+const generateRoomLinkLocal = async () => {
   try {
-    const { generateRoomLink } = await import('~/utils/simpleSignaling')
     const roomInfo = {
       roomCode: roomCode,
       hostPeerId: currentUserId.value,
@@ -684,7 +685,7 @@ const generateQRCode = async () => {
 // 监听分享模态框状态
 watch(showShareModal, async (newValue) => {
   if (newValue && isHost.value) {
-    await generateRoomLink()
+    await generateRoomLinkLocal()
     await nextTick()
     await generateQRCode()
   }
