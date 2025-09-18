@@ -104,17 +104,32 @@ export class SimpleSignalingService {
     if (typeof window === 'undefined') return null
     
     try {
+      const hash = window.location.hash
+      console.log('📡 当前URL hash:', hash)
+      
       // 从路由参数获取房间码
-      const pathMatch = window.location.hash.match(/\/room\/([A-Z0-9]{6})/)
-      if (!pathMatch) return null
+      const pathMatch = hash.match(/\/room\/([A-Z0-9]{6})/)
+      if (!pathMatch) {
+        console.log('📡 未匹配到房间码路径')
+        return null
+      }
       
       const roomCode = pathMatch[1]
+      console.log('📡 解析到房间码:', roomCode)
       
-      // 从查询参数获取房间信息
-      const params = new URLSearchParams(window.location.search)
+      // 从hash中的查询参数获取房间信息（而不是window.location.search）
+      const queryMatch = hash.match(/\?(.+)$/)
+      if (!queryMatch) {
+        console.log('📡 未找到查询参数')
+        return null
+      }
+      
+      const params = new URLSearchParams(queryMatch[1])
       const hostPeerId = params.get('host')
       const hostName = params.get('name')
       const timestamp = params.get('t')
+      
+      console.log('📡 解析到参数:', { hostPeerId, hostName, timestamp })
       
       if (hostPeerId && hostName && timestamp) {
         const hostInfo: RoomInfo = {
@@ -126,6 +141,8 @@ export class SimpleSignalingService {
         
         console.log(`📡 从URL解析房间信息:`, hostInfo)
         return { roomCode, hostInfo }
+      } else {
+        console.log('📡 参数不完整，无法解析房间信息')
       }
     } catch (error) {
       console.error('📡 解析URL房间信息失败:', error)

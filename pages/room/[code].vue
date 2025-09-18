@@ -531,6 +531,20 @@ const shareRoomLink = async () => {
 // 生命周期
 onMounted(async () => {
   try {
+    console.log('🏠 房间页面挂载，房间码:', roomCode)
+    console.log('🏠 当前URL:', window.location.href)
+    console.log('🏠 URL hash:', window.location.hash)
+    
+    // 检查是否通过分享链接访问
+    const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
+    const urlRoomInfo = parseRoomFromUrl()
+    
+    if (urlRoomInfo) {
+      console.log('🏠 检测到分享链接访问:', urlRoomInfo)
+    } else {
+      console.log('🏠 普通房间码访问')
+    }
+    
     // 加入房间
     await roomStore.joinRoom(roomCode)
     
