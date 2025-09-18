@@ -650,33 +650,46 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   const initializeNetworking = async (roomCode: string, isHost: boolean) => {
-    // 初始化真实的WebRTC网络连接
-    const { useRealNetworkStore } = await import('~/stores/realNetwork')
-    const realNetworkStore = useRealNetworkStore()
+    // 初始化PeerJS网络连接
+    const { usePeerNetworkStore } = await import('~/stores/peerNetwork')
+    const peerNetworkStore = usePeerNetworkStore()
     
     // 设置玩家ID
     const gameStore = useGameStore()
-    realNetworkStore.setPlayerId(gameStore.playerId)
+    peerNetworkStore.setPlayerId(gameStore.playerId)
     
     // 初始化P2P连接
-    await realNetworkStore.initializeP2PConnection(roomCode, isHost)
+    await peerNetworkStore.initializeP2PConnection(roomCode, isHost)
     
     // 注册消息处理器
-    realNetworkStore.onMessage(handleRoomMessage)
+    peerNetworkStore.onMessage(handleRoomMessage)
     
-    console.log('🌐 真实网络连接初始化完成')
+    console.log('🌐 PeerJS网络连接初始化完成')
   }
 
-  const connectToRoom = async (roomCode: string, playerId: string, playerName: string) => {
-    // 连接到现有房间（使用真实WebRTC）
-    const { useRealNetworkStore } = await import('~/stores/realNetwork')
-    const realNetworkStore = useRealNetworkStore()
+  const connectToRoom = async (roomCode: string, playerId: string, playerName: string, hostPeerId?: string) => {
+    // 连接到现有房间（使用PeerJS）
+    const { usePeerNetworkStore } = await import('~/stores/peerNetwork')
+    const peerNetworkStore = usePeerNetworkStore()
     
     // 设置玩家ID
-    realNetworkStore.setPlayerId(playerId)
+    peerNetworkStore.setPlayerId(playerId)
+    
+    // 从URL解析房主ID
+    if (!hostPeerId) {
+      const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
+      const urlRoomInfo = parseRoomFromUrl()
+      if (urlRoomInfo && urlRoomInfo.hostInfo) {
+        hostPeerId = urlRoomInfo.hostInfo.hostPeerId
+      }
+    }
+    
+    if (!hostPeerId) {
+      throw new Error('无法获取房主ID')
+    }
     
     // 连接到房主
-    await realNetworkStore.connectToHost(roomCode)
+    await peerNetworkStore.connectToHost(roomCode, hostPeerId)
     
     // 发送加入请求
     await sendRoomMessage({
@@ -690,14 +703,27 @@ export const useRoomStore = defineStore('room', () => {
     })
     
     // 注册消息处理器
-    realNetworkStore.onMessage(handleRoomMessage)
+    peerNetworkStore.onMessage(handleRoomMessage)
     
-    console.log('🌐 真实网络连接到房间完成')
+    console.log('🌐 PeerJS网络连接到房间完成')
   }
 
   const sendRoomMessage = async (message: any) => {
     try {
-      // 尝试使用真实网络连接
+      // 优先使用PeerJS网络连接
+      const { usePeerNetworkStore } = await import('~/stores/peerNetwork')
+      const peerNetworkStore = usePeerNetworkStore()
+      
+      if (peerNetworkStore.isConnected) {
+        await peerNetworkStore.sendMessage(message)
+        return
+      }
+    } catch (error) {
+      console.warn('🌐 PeerJS网络连接不可用，尝试其他连接方式')
+    }
+    
+    try {
+      // 尝试使用WebRTC网络连接
       const { useRealNetworkStore } = await import('~/stores/realNetwork')
       const realNetworkStore = useRealNetworkStore()
       
@@ -706,10 +732,10 @@ export const useRoomStore = defineStore('room', () => {
         return
       }
     } catch (error) {
-      console.warn('🌐 真实网络连接不可用，回退到模拟连接')
+      console.warn('🌐 WebRTC网络连接不可用，回退到模拟连接')
     }
     
-    // 回退到原有的网络连接
+    // 最后回退到原有的网络连接
     const networkStore = useNetworkStore()
     await networkStore.sendMessage(message)
   }
