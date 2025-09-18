@@ -28,23 +28,23 @@ export class PeerJSConnection {
       // 动态导入PeerJS
       const { default: Peer } = await import('peerjs')
       
-      // 使用PeerJS的免费信令服务器
+      // 使用PeerJS的官方免费服务器
       this.peer = new Peer(peerId, {
-        host: 'peerserver-production.herokuapp.com',
-        port: 443,
-        path: '/myapp',
+        // 使用官方的免费PeerJS服务器
         secure: true,
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun.services.mozilla.com' },
             {
               urls: 'turn:openrelay.metered.ca:80',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             }
           ]
-        }
+        },
+        debug: 2 // 启用详细调试日志
       })
 
       return new Promise((resolve, reject) => {

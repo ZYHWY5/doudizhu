@@ -64,6 +64,11 @@ export interface BiddingInfo {
   }>
   phase: 'calling' | 'grabbing' | 'finished' // 叫地主阶段 | 抢地主阶段 | 结束
   landlordCandidateId: string | null // 当前地主候选人
+  multiplierHistory?: Array<{
+    playerId: string
+    action: 'double' | 'pass'
+    timestamp: number
+  }>
 }
 
 export interface MultiplierInfo {
@@ -1134,54 +1139,152 @@ export const useGameStore = defineStore('game', () => {
   
   // 处理AI回合
   const processAITurn = async (player: Player) => {
-    console.log('开始处理AI回合:', player.name, '游戏阶段:', gameState.value.phase)
-    const { executeAutoPlay } = useAI()
+    console.log('🤖 开始处理AI回合:', player.name, '游戏阶段:', gameState.value.phase)
+    
+    // AI决策延迟，让玩家看到AI在"思考"
+    const thinkingTime = 800 + Math.random() * 1500
+    await new Promise(resolve => setTimeout(resolve, thinkingTime))
     
     try {
-      if (gameState.value.phase === 'multiplier') {
-        // AI倍数决策 - 不需要调用AI worker，直接处理
-        console.log(`AI ${player.name} 倍数决策阶段`)
-        
-        // 简单策略：30%概率加倍
-        const shouldDouble = Math.random() < 0.3
-        const action = shouldDouble ? 'double' : 'pass'
-        console.log(`AI ${player.name} 倍数决策:`, action)
-        handleMultiplierDecision(player.id, action)
+      // 尝试使用智能AI决策
+      const smartDecision = await makeSmartAIDecision(player)
+      if (smartDecision) {
+        console.log(`🤖 AI ${player.name} 智能决策:`, smartDecision.decision, `(置信度: ${smartDecision.confidence})`)
+        await executeAIDecision(player, smartDecision)
         return
       }
+    } catch (error) {
+      console.error('🤖 智能AI决策失败:', error)
+    }
+    
+    // 回退到本地规则AI
+    console.log(`🤖 AI ${player.name} 使用本地规则决策`)
+    await executeLocalAIDecision(player)
+  }
+
+  const makeSmartAIDecision = async (player: Player) => {
+    try {
+      const { makeAIDecision } = await import('~/utils/aiAPI')
       
-      // 其他阶段需要调用AI决策系统
-      console.log('调用AI决策系统...')
-      const decision = await executeAutoPlay(gameState.value, player.id)
-      console.log('AI决策结果:', decision)
+      // 构建AI决策上下文
+      const context = {
+        phase: gameState.value.phase as 'bidding' | 'multiplier' | 'playing',
+        currentCards: player.cards.map(card => `${card.rank}${card.suit}`),
+        playedCards: gameState.value.currentPlayedCards ? 
+          gameState.value.currentPlayedCards.cards.map(card => `${card.rank}${card.suit}`) : [],
+        remainingCards: Object.fromEntries(
+          gameState.value.players.map(p => [p.id, p.cards.length])
+        ),
+        playerId: player.id,
+        playerRole: gameState.value.landlordId === player.id ? 'landlord' as const : 'farmer' as const,
+        biddingHistory: gameState.value.biddingInfo.bids,
+        multiplierHistory: gameState.value.biddingInfo.multiplierHistory || [],
+        playHistory: [], // TODO: 添加出牌历史记录
+        personality: getAIPersonality(player.id),
+        difficulty: getAIDifficulty()
+      }
       
-      if (gameState.value.phase === 'bidding') {
-        // AI叫地主
-        if (decision.action === 'bid' && decision.bid !== undefined) {
-          await handleBidLandlord(player.id, decision.bid as 'call' | 'grab' | 'pass')
-        }
-      } else if (gameState.value.phase === 'playing') {
-        // AI出牌
-        if (decision.action === 'play' && decision.cards) {
-          // 模拟AI出牌
-          await executeAIPlay(player, decision.cards)
-        } else if (decision.action === 'pass') {
-          // AI过牌
+      return await makeAIDecision(context)
+    } catch (error) {
+      console.error('构建AI决策上下文失败:', error)
+      return null
+    }
+  }
+
+  const executeAIDecision = async (player: Player, decision: any) => {
+    if (gameState.value.phase === 'bidding') {
+      await handleBidLandlord(player.id, decision.decision)
+    } else if (gameState.value.phase === 'multiplier') {
+      handleMultiplierDecision(player.id, decision.decision)
+    } else if (gameState.value.phase === 'playing') {
+      // 解析出牌决策
+      const cardStrings = parsePlayDecision(decision.decision, player.cards.map(card => `${card.rank}${card.suit}`))
+      if (cardStrings.length > 0) {
+        // 将字符串转换为Card对象
+        const cards = player.cards.filter(card => cardStrings.includes(`${card.rank}${card.suit}`))
+        await executeAIPlay(player, cards)
+      } else {
+        // 解析失败，回退到原有AI逻辑
+        const { executeAutoPlay } = useAI()
+        const fallbackDecision = await executeAutoPlay(gameState.value, player.id)
+        if (fallbackDecision.action === 'play' && fallbackDecision.cards) {
+          await executeAIPlay(player, fallbackDecision.cards)
+        } else {
           await executeAIPass(player)
         }
       }
-    } catch (error) {
-      console.error(`AI玩家 ${player.name} 决策失败:`, error)
+    }
+  }
+
+  const executeLocalAIDecision = async (player: Player) => {
+    try {
+      const { getLocalAIDecision } = await import('~/utils/aiAPI')
       
-      // 降级到简单决策
+      const context = {
+        phase: gameState.value.phase as 'bidding' | 'multiplier' | 'playing',
+        currentCards: player.cards.map(card => `${card.rank}${card.suit}`),
+        playedCards: gameState.value.currentPlayedCards ? 
+          gameState.value.currentPlayedCards.cards.map(card => `${card.rank}${card.suit}`) : [],
+        remainingCards: Object.fromEntries(
+          gameState.value.players.map(p => [p.id, p.cards.length])
+        ),
+        playerId: player.id,
+        playerRole: gameState.value.landlordId === player.id ? 'landlord' as const : 'farmer' as const,
+        biddingHistory: gameState.value.biddingInfo.bids,
+        multiplierHistory: gameState.value.biddingInfo.multiplierHistory || [],
+        playHistory: [],
+        personality: getAIPersonality(player.id),
+        difficulty: getAIDifficulty()
+      }
+      
+      const decision = getLocalAIDecision(context)
+      await executeAIDecision(player, decision)
+    } catch (error) {
+      console.error('本地AI决策失败，使用原有逻辑:', error)
+      
+      // 最后的回退逻辑
       if (gameState.value.phase === 'bidding') {
         await handleBidLandlord(player.id, 'pass')
+      } else if (gameState.value.phase === 'multiplier') {
+        handleMultiplierDecision(player.id, 'pass')
       } else {
         await executeAIPass(player)
       }
     }
   }
   
+  // AI个性和难度设置
+  const aiPersonalities = ref<{ [playerId: string]: string }>({})
+  const aiDifficulty = ref<'easy' | 'medium' | 'hard' | 'expert'>('medium')
+
+  const getAIPersonality = (playerId: string): 'aggressive' | 'conservative' | 'balanced' | 'unpredictable' => {
+    if (!aiPersonalities.value[playerId]) {
+      const personalities = ['aggressive', 'conservative', 'balanced', 'unpredictable']
+      aiPersonalities.value[playerId] = personalities[Math.floor(Math.random() * personalities.length)]
+    }
+    return aiPersonalities.value[playerId] as any
+  }
+
+  const getAIDifficulty = () => aiDifficulty.value
+
+  const setAIDifficulty = (difficulty: 'easy' | 'medium' | 'hard' | 'expert') => {
+    aiDifficulty.value = difficulty
+    console.log('🤖 AI难度已设置为:', difficulty)
+  }
+
+  const parsePlayDecision = (decision: string, hand: string[]): string[] => {
+    // 简单的出牌决策解析
+    try {
+      // 尝试解析单牌或多牌
+      const cards = decision.split(',').map(c => c.trim())
+      const validCards = cards.filter(card => hand.includes(card))
+      return validCards
+    } catch (error) {
+      console.error('解析AI出牌决策失败:', error)
+      return []
+    }
+  }
+
   // 执行AI出牌
   const executeAIPlay = async (player: Player, cards: Card[]) => {
     // 从AI玩家手牌中移除出的牌
@@ -1986,6 +2089,8 @@ export const useGameStore = defineStore('game', () => {
     initializeAudio,
     cleanupAudio,
     startAIGame,
+    setAIDifficulty,
+    getAIDifficulty,
     selectCard,
     playSelectedCards,
     passTurn,
