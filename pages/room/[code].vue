@@ -320,7 +320,9 @@ const roomCode = route.params.code as string
 definePageMeta({
   validate: async (route) => {
     const code = route.params.code as string
-    return /^[A-Z0-9]{6}$/.test(code)
+    const isValid = /^[A-Z0-9]{6}$/.test(code)
+    console.log('🔍 页面验证 - 房间码:', code, '验证结果:', isValid)
+    return isValid
   }
 })
 
@@ -530,36 +532,63 @@ const shareRoomLink = async () => {
 
 // 生命周期
 onMounted(async () => {
+  console.log('🏠 房间页面挂载开始，房间码:', roomCode)
+  console.log('🏠 当前URL:', window.location.href)
+  console.log('🏠 URL hash:', window.location.hash)
+  console.log('🏠 URL search:', window.location.search)
+  
   try {
-    console.log('🏠 房间页面挂载，房间码:', roomCode)
-    console.log('🏠 当前URL:', window.location.href)
-    console.log('🏠 URL hash:', window.location.hash)
-    
     // 检查是否通过分享链接访问
     const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
     const urlRoomInfo = parseRoomFromUrl()
     
     if (urlRoomInfo) {
       console.log('🏠 检测到分享链接访问:', urlRoomInfo)
+      
+      // 验证URL中的房间码与路由参数是否一致
+      if (urlRoomInfo.roomCode !== roomCode) {
+        console.warn('🏠 URL房间码与路由参数不一致:', {
+          urlRoomCode: urlRoomInfo.roomCode,
+          routeRoomCode: roomCode
+        })
+      }
     } else {
-      console.log('🏠 普通房间码访问')
+      console.log('🏠 普通房间码访问或URL解析失败')
     }
+    
+    console.log('🏠 开始加入房间...')
     
     // 加入房间
     await roomStore.joinRoom(roomCode)
     
+    console.log('🏠 房间加入成功，开始网络监控')
+    
     // 开始网络监控
     networkStore.startMonitoring()
+    
+    console.log('🏠 房间页面初始化完成')
+    
   } catch (error) {
-    console.error('加入房间失败:', error)
+    console.error('🏠 房间页面初始化失败:', error)
+    console.error('🏠 错误详情:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    
     gameStore.showNotification({
       type: 'error',
       title: '加入失败',
-      message: '无法加入房间，可能房间不存在或已满员'
+      message: `无法加入房间 ${roomCode}，${error instanceof Error ? error.message : '请检查房间码或网络连接'}`
     })
     
-    // 返回大厅
-    await navigateTo('/')
+    console.log('🏠 3秒后返回首页...')
+    
+    // 延迟3秒后返回大厅，让用户看到错误信息
+    setTimeout(async () => {
+      console.log('🏠 返回首页')
+      await navigateTo('/')
+    }, 3000)
   }
 })
 
