@@ -93,7 +93,20 @@
         <div v-if="requestStats.total > 0" class="bg-gray-50 p-3 rounded-lg">
           <div class="flex items-center justify-between text-sm">
             <span class="text-gray-600">今日AI请求</span>
-            <span class="font-medium">{{ requestStats.used }} / {{ requestStats.total }}</span>
+            <div class="flex items-center space-x-2">
+              <span class="font-medium">{{ requestStats.used }} / {{ requestStats.total }}</span>
+              <button
+                @click="refreshUsageStats"
+                class="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                title="刷新本地使用统计"
+                :disabled="refreshing"
+              >
+                <Icon 
+                  name="arrow-path" 
+                  :class="['w-3 h-3', refreshing ? 'animate-spin' : '']"
+                />
+              </button>
+            </div>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
             <div 
@@ -103,6 +116,9 @@
           </div>
           <p class="text-xs text-gray-500 mt-1">
             剩余 {{ requestStats.remaining }} 次请求
+            <span v-if="lastRefresh" class="ml-2">
+              ({{ formatLastRefresh(lastRefresh) }})
+            </span>
           </p>
         </div>
       </div>
@@ -160,6 +176,9 @@ const requestStats = ref({
   remaining: 14400
 })
 
+const refreshing = ref(false)
+const lastRefresh = ref<Date | null>(null)
+
 // 获取当前设置
 onMounted(async () => {
   const gameStore = useGameStore()
@@ -183,13 +202,47 @@ const getDifficultyDescription = (difficulty: string): string => {
 
 const updateRequestStats = async () => {
   try {
-    const { getAIService } = await import('~/utils/aiAPI')
-    const aiService = getAIService()
-    requestStats.value.used = aiService.getRequestCount()
-    requestStats.value.remaining = aiService.getRemainingRequests()
+    // 获取本地计数统计（Groq API暂不支持使用统计端点）
+    const { getAPIUsage } = await import('~/utils/aiAPI')
+    const apiUsage = await getAPIUsage()
+    
+    if (apiUsage) {
+      requestStats.value.used = apiUsage.used
+      requestStats.value.total = apiUsage.limit
+      requestStats.value.remaining = apiUsage.limit - apiUsage.used
+      lastRefresh.value = new Date()
+      console.log('📊 已更新本地使用统计:', apiUsage)
+    } else {
+      // 备用获取方式
+      const { getAIService } = await import('~/utils/aiAPI')
+      const aiService = getAIService()
+      requestStats.value.used = aiService.getRequestCount()
+      requestStats.value.remaining = aiService.getRemainingRequests()
+      console.log('📊 使用备用方式获取统计')
+    }
   } catch (error) {
     console.error('获取AI请求统计失败:', error)
   }
+}
+
+const refreshUsageStats = async () => {
+  if (refreshing.value) return
+  
+  refreshing.value = true
+  try {
+    await updateRequestStats()
+  } finally {
+    refreshing.value = false
+  }
+}
+
+const formatLastRefresh = (date: Date): string => {
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+  
+  if (diff < 60) return '刚刚更新'
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+  return `${Math.floor(diff / 3600)}小时前`
 }
 
 const testApiKey = async (key: string) => {

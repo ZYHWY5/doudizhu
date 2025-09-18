@@ -48,6 +48,16 @@ export const useAI = () => {
     if (!process.client) return
     
     try {
+      // 🔑 初始化API密钥
+      const savedApiKey = localStorage.getItem('groq_api_key')
+      if (savedApiKey) {
+        console.log('🔑 加载已保存的API密钥:', savedApiKey.substring(0, 10) + '...')
+        const { setAIApiKey } = await import('~/utils/aiAPI')
+        setAIApiKey(savedApiKey)
+      } else {
+        console.log('🔑 未找到保存的API密钥，将使用本地规则AI')
+      }
+      
       // 创建AI Worker
       aiWorker.value = new Worker('/workers/ai-worker.js', { type: 'module' })
       

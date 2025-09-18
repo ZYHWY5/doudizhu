@@ -458,11 +458,14 @@ export const useGameStore = defineStore('game', () => {
       const { initializeAI } = useAI()
       await initializeAI(difficulty)
       
-      // 创建AI玩家
+      // 创建AI玩家 - 确保名字不会被覆盖
+      const aiPlayer1Name = difficulty === 'easy' ? 'AI新手' : difficulty === 'normal' ? 'AI高手' : 'AI大师'
+      const aiPlayer2Name = difficulty === 'easy' ? 'AI学徒' : difficulty === 'normal' ? 'AI专家' : 'AI宗师'
+      
       const aiPlayers = [
         {
           id: 'ai-1',
-          name: difficulty === 'easy' ? 'AI新手' : difficulty === 'normal' ? 'AI高手' : 'AI大师',
+          name: aiPlayer1Name,
           cards: [],
           isReady: true,
           isOnline: true,
@@ -471,7 +474,7 @@ export const useGameStore = defineStore('game', () => {
         },
         {
           id: 'ai-2', 
-          name: difficulty === 'easy' ? 'AI学徒' : difficulty === 'normal' ? 'AI专家' : 'AI宗师',
+          name: aiPlayer2Name,
           cards: [],
           isReady: true,
           isOnline: true,
@@ -481,11 +484,12 @@ export const useGameStore = defineStore('game', () => {
       ]
       
       // 调试AI玩家创建
+      console.log('🔍 创建AI玩家:')
       aiPlayers.forEach(ai => {
-        console.log('创建AI玩家:', ai.name, 'ID:', ai.id, 'isAutoPlay:', ai.isAutoPlay)
+        console.log(`  - AI玩家: ${ai.name} (ID: ${ai.id}, isAutoPlay: ${ai.isAutoPlay})`)
       })
 
-      // 创建玩家
+      // 创建玩家 - 确保人类玩家信息正确
       const player: Player = {
         id: playerId.value,
         name: playerName.value,
@@ -495,9 +499,21 @@ export const useGameStore = defineStore('game', () => {
         isAutoPlay: false,
         position: 'bottom'
       }
+      
+      // 🔍 调试人类玩家创建
+      console.log('🔍 创建人类玩家:')
+      console.log(`  - 玩家: ${player.name} (ID: ${player.id}, isAutoPlay: ${player.isAutoPlay})`)
+      console.log(`  - playerName.value: ${playerName.value}`)
+      console.log(`  - playerId.value: ${playerId.value}`)
 
       gameState.value.players = [player, ...aiPlayers]
       gameState.value.phase = 'waiting'
+      
+      // 🔍 最终玩家列表验证
+      console.log('🔍 最终玩家列表:')
+      gameState.value.players.forEach((p, index) => {
+        console.log(`  [${index}] ${p.name} (ID: ${p.id}, AI: ${p.isAutoPlay}, 位置: ${p.position})`)
+      })
       
       // 先跳转到游戏页面
       if (process.client) {
@@ -510,6 +526,40 @@ export const useGameStore = defineStore('game', () => {
       // 发牌
       await dealCards()
       console.log('发牌完成，每位玩家手牌数量:', gameState.value.players.map(p => `${p.name}: ${p.cards.length}张`))
+      
+      // 🔍 调试：检查玩家信息
+      console.log('🔍 调试玩家信息:')
+      gameState.value.players.forEach(p => {
+        console.log(`  - 玩家: ${p.name} (ID: ${p.id})`)
+        console.log(`    手牌数量: ${p.cards.length}`)
+        console.log(`    位置: ${p.position}`)
+        console.log(`    是否AI: ${p.isAutoPlay}`)
+      })
+      
+      // 🔍 调试：检查当前玩家信息
+      console.log('🔍 当前玩家信息:')
+      console.log(`  - playerId: ${playerId.value}`)
+      console.log(`  - playerName: ${playerName.value}`)
+      console.log(`  - myPlayer: ${myPlayer.value?.name} (${myPlayer.value?.id})`)
+      console.log(`  - myPlayer手牌: ${myPlayer.value?.cards.length || 0}张`)
+      
+      // 🚨 检测到玩家ID不匹配问题！
+      if (!myPlayer.value) {
+        console.error('🚨 严重错误：找不到当前玩家！')
+        console.error('  - 期望的playerId:', playerId.value)
+        console.error('  - 实际的玩家列表:', gameState.value.players.map(p => `${p.name}(${p.id})`))
+        
+        // 🔧 尝试修复：使用游戏中的第一个非AI玩家作为当前玩家
+        const humanPlayer = gameState.value.players.find(p => !p.isAutoPlay)
+        if (humanPlayer) {
+          console.log('🔧 修复：更新playerId为正确的人类玩家ID')
+          playerId.value = humanPlayer.id
+          console.log(`  - 修复后的playerId: ${playerId.value}`)
+          // 重新获取myPlayer，因为playerId已经更新
+          const fixedMyPlayer = gameState.value.players.find(p => p.id === playerId.value)
+          console.log(`  - 修复后的myPlayer: ${fixedMyPlayer?.name} (${fixedMyPlayer?.id})`)
+        }
+      }
       
       // 重置重发计数器
       reshuffleCount.value = 0
@@ -1060,7 +1110,7 @@ export const useGameStore = defineStore('game', () => {
     }
     
     console.log('当前玩家:', currentPlayer.name, 'isAutoPlay:', currentPlayer.isAutoPlay, '游戏阶段:', gameState.value.phase)
-    console.log('玩家ID:', currentPlayer.id, '是否是人类玩家:', playerId.value === currentPlayer.id)
+    console.log('玩家ID:', currentPlayer.id, '是否是当前用户:', playerId.value === currentPlayer.id, '是否是人类玩家:', !currentPlayer.isAutoPlay)
     console.log('剩余时间:', turnTimeLeft.value)
     
     // 如果是AI玩家，给一个短暂延迟让界面更新，然后执行操作
@@ -1181,7 +1231,22 @@ export const useGameStore = defineStore('game', () => {
   }
 
   const executeAIDecision = async (player: Player, decision: any) => {
+    console.log(`🤖 executeAIDecision: ${player.name} 准备执行决策 ${decision.decision} (阶段: ${gameState.value.phase})`)
+    
     if (gameState.value.phase === 'bidding') {
+      // 🚨 额外验证：确保轮到该AI玩家
+      if (gameState.value.biddingInfo.currentBidderId !== player.id) {
+        console.error(`🚨 AI ${player.name} 试图在非自己回合做决策，当前应该是 ${gameState.value.players.find(p => p.id === gameState.value.biddingInfo.currentBidderId)?.name} 的回合`)
+        return
+      }
+      
+      // 🚨 额外验证：确保该AI玩家还没有做过决策
+      const existingDecision = gameState.value.biddingInfo.bids.find(bid => bid.playerId === player.id)
+      if (existingDecision) {
+        console.error(`🚨 AI ${player.name} 已经做过决策 (${existingDecision.bid})，不能重复决策`)
+        return
+      }
+      
       await handleBidLandlord(player.id, decision.decision)
     } else if (gameState.value.phase === 'multiplier') {
       handleMultiplierDecision(player.id, decision.decision)
@@ -1765,6 +1830,13 @@ export const useGameStore = defineStore('game', () => {
       console.log('🎮 单机模式：使用真随机选择起始玩家')
     }
     
+    // 🔍 调试：叫地主阶段开始
+    console.log('🔍 叫地主阶段调试信息:')
+    console.log(`  - 起始玩家索引: ${randomStartIndex}`)
+    console.log(`  - 玩家列表:`, gameState.value.players.map(p => `${p.name}(${p.id})`))
+    console.log(`  - 当前玩家ID: ${playerId.value}`)
+    console.log(`  - isMyTurn: ${isMyTurn.value}`)
+    
     const firstPlayer = gameState.value.players[randomStartIndex]
     
     if (!firstPlayer || !firstPlayer.id) {
@@ -1802,6 +1874,27 @@ export const useGameStore = defineStore('game', () => {
   const handleBidLandlord = async (playerId: string, bidType: 'call' | 'grab' | 'pass') => {
     const biddingInfo = gameState.value.biddingInfo
     const player = gameState.value.players.find(p => p.id === playerId)
+    
+    // 🔍 调试：记录叫地主决策
+    console.log('🔍 handleBidLandlord 开始:')
+    console.log(`  - 玩家: ${player?.name} (${playerId})`)
+    console.log(`  - 决策: ${bidType}`)
+    console.log(`  - 当前阶段: ${biddingInfo.phase}`)
+    console.log(`  - 当前应该决策的玩家: ${biddingInfo.currentBidderId}`)
+    console.log(`  - 已有决策历史:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
+    
+    // 🚨 验证：检查玩家是否已经做过决策
+    const existingDecision = biddingInfo.bids.find(bid => bid.playerId === playerId)
+    if (existingDecision) {
+      console.error(`🚨 玩家 ${player?.name} 已经做过决策 (${existingDecision.bid})，拒绝重复决策 ${bidType}`)
+      return
+    }
+    
+    // 🚨 验证：检查是否轮到该玩家
+    if (biddingInfo.currentBidderId !== playerId) {
+      console.error(`🚨 不是玩家 ${player?.name} 的回合，当前应该是 ${gameState.value.players.find(p => p.id === biddingInfo.currentBidderId)?.name} 的回合`)
+      return
+    }
     
     // 添加操作反馈
     if (player && process.client) {
@@ -1920,17 +2013,25 @@ export const useGameStore = defineStore('game', () => {
     const biddingInfo = gameState.value.biddingInfo
     const currentIndex = gameState.value.players.findIndex(p => p.id === biddingInfo.currentBidderId)
     
+    console.log('🔄 proceedToNextBidder 开始:')
+    console.log(`  - 当前阶段: ${biddingInfo.phase}`)
+    console.log(`  - 当前玩家索引: ${currentIndex}`)
+    console.log(`  - 已有决策:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
+    
     if (currentIndex === -1) {
-      console.error('proceedToNextBidder: 找不到当前玩家，强制重新洗牌')
+      console.error('🚨 proceedToNextBidder: 找不到当前玩家，强制重新洗牌')
       reshuffleCards()
       return
     }
     
     const nextIndex = (currentIndex + 1) % gameState.value.players.length
     const nextPlayer = gameState.value.players[nextIndex]
+    const oldCurrentBidderId = biddingInfo.currentBidderId
     biddingInfo.currentBidderId = nextPlayer.id
     
-    console.log('proceedToNextBidder: 从', gameState.value.players[currentIndex].name, '切换到', nextPlayer.name)
+    console.log(`🔄 proceedToNextBidder: 从 ${gameState.value.players[currentIndex].name} 切换到 ${nextPlayer.name}`)
+    console.log(`  - 旧的currentBidderId: ${oldCurrentBidderId}`)
+    console.log(`  - 新的currentBidderId: ${biddingInfo.currentBidderId}`)
     
     // 在抢地主阶段，添加额外的循环检测
     if (biddingInfo.phase === 'grabbing') {
