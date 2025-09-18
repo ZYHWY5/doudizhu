@@ -650,18 +650,33 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   const initializeNetworking = async (roomCode: string, isHost: boolean) => {
-    // 初始化WebRTC网络连接
-    const networkStore = useNetworkStore()
-    await networkStore.initializeP2PConnection(roomCode, isHost)
+    // 初始化真实的WebRTC网络连接
+    const { useRealNetworkStore } = await import('~/stores/realNetwork')
+    const realNetworkStore = useRealNetworkStore()
+    
+    // 设置玩家ID
+    const gameStore = useGameStore()
+    realNetworkStore.setPlayerId(gameStore.playerId)
+    
+    // 初始化P2P连接
+    await realNetworkStore.initializeP2PConnection(roomCode, isHost)
     
     // 注册消息处理器
-    networkStore.onMessage(handleRoomMessage)
+    realNetworkStore.onMessage(handleRoomMessage)
+    
+    console.log('🌐 真实网络连接初始化完成')
   }
 
   const connectToRoom = async (roomCode: string, playerId: string, playerName: string) => {
-    // 连接到现有房间
-    const networkStore = useNetworkStore()
-    await networkStore.connectToHost(roomCode)
+    // 连接到现有房间（使用真实WebRTC）
+    const { useRealNetworkStore } = await import('~/stores/realNetwork')
+    const realNetworkStore = useRealNetworkStore()
+    
+    // 设置玩家ID
+    realNetworkStore.setPlayerId(playerId)
+    
+    // 连接到房主
+    await realNetworkStore.connectToHost(roomCode)
     
     // 发送加入请求
     await sendRoomMessage({
@@ -675,10 +690,26 @@ export const useRoomStore = defineStore('room', () => {
     })
     
     // 注册消息处理器
-    networkStore.onMessage(handleRoomMessage)
+    realNetworkStore.onMessage(handleRoomMessage)
+    
+    console.log('🌐 真实网络连接到房间完成')
   }
 
   const sendRoomMessage = async (message: any) => {
+    try {
+      // 尝试使用真实网络连接
+      const { useRealNetworkStore } = await import('~/stores/realNetwork')
+      const realNetworkStore = useRealNetworkStore()
+      
+      if (realNetworkStore.isConnected) {
+        await realNetworkStore.sendMessage(message)
+        return
+      }
+    } catch (error) {
+      console.warn('🌐 真实网络连接不可用，回退到模拟连接')
+    }
+    
+    // 回退到原有的网络连接
     const networkStore = useNetworkStore()
     await networkStore.sendMessage(message)
   }
