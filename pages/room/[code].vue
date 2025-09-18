@@ -39,6 +39,14 @@
                 房间信息
               </h2>
               <div class="flex items-center space-x-2">
+                <button 
+                  v-if="isHost"
+                  @click="showShareModal = true"
+                  class="btn btn-primary btn-sm"
+                >
+                  <Icon name="share" class="w-4 h-4 mr-1" />
+                  分享房间
+                </button>
                 <span 
                   :class="[
                     'px-2 py-1 rounded-full text-xs font-medium',
@@ -242,6 +250,64 @@
         </div>
       </div>
     </main>
+
+    <!-- 分享房间模态框 -->
+    <div v-if="showShareModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">分享房间</h3>
+          <button @click="showShareModal = false" class="text-gray-400 hover:text-gray-600">
+            <Icon name="x" class="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div class="space-y-4">
+          <!-- 房间链接 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">房间链接</label>
+            <div class="flex">
+              <input 
+                :value="roomLink"
+                readonly
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md text-sm bg-gray-50"
+              />
+              <button 
+                @click="copyRoomLink"
+                class="px-3 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 text-sm"
+              >
+                复制
+              </button>
+            </div>
+          </div>
+          
+          <!-- 二维码 -->
+          <div class="text-center">
+            <label class="block text-sm font-medium text-gray-700 mb-2">扫码加入</label>
+            <div class="inline-block p-4 bg-white border-2 border-gray-200 rounded-lg">
+              <div ref="qrCodeRef" class="w-32 h-32 flex items-center justify-center bg-gray-100 rounded">
+                <span class="text-xs text-gray-500">二维码加载中...</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 使用说明 -->
+          <div class="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+            <p class="font-medium mb-1">📱 使用方法：</p>
+            <ul class="space-y-1 text-xs">
+              <li>• 复制链接发送给好友</li>
+              <li>• 或让好友扫描二维码</li>
+              <li>• 好友点击链接即可加入房间</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="flex justify-end mt-6">
+          <button @click="showShareModal = false" class="btn btn-primary">
+            完成
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -266,6 +332,9 @@ const networkStore = useNetworkStore()
 // 响应式数据
 const isTogglingReady = ref(false)
 const isStartingGame = ref(false)
+const showShareModal = ref(false)
+const qrCodeRef = ref<HTMLElement>()
+const roomLink = ref('')
 
 // 计算属性
 const players = computed(() => roomStore.players)
@@ -510,6 +579,72 @@ onMounted(() => {
   console.log('roomStore.isHost:', roomStore.isHost)
   console.log('roomStore.currentUserId:', roomStore.currentUserId)
   console.log('roomStore.players:', roomStore.players)
+})
+
+// 生成房间分享链接
+const generateRoomLink = async () => {
+  try {
+    const { generateRoomLink } = await import('~/utils/simpleSignaling')
+    const roomInfo = {
+      roomCode: roomCode,
+      hostPeerId: currentUserId.value,
+      hostName: gameStore.playerName || '房主',
+      timestamp: Date.now()
+    }
+    roomLink.value = generateRoomLink(roomInfo)
+    console.log('📡 生成房间链接:', roomLink.value)
+  } catch (error) {
+    console.error('生成房间链接失败:', error)
+    roomLink.value = `${window.location.origin}${window.location.pathname}#/room/${roomCode}`
+  }
+}
+
+// 复制房间链接
+const copyRoomLink = async () => {
+  try {
+    await navigator.clipboard.writeText(roomLink.value)
+    gameStore.showNotification({
+      type: 'success',
+      title: '复制成功',
+      message: '链接已复制到剪贴板'
+    })
+  } catch (error) {
+    console.error('复制失败:', error)
+    gameStore.showNotification({
+      type: 'error',
+      title: '复制失败',
+      message: '请手动复制链接'
+    })
+  }
+}
+
+// 生成二维码
+const generateQRCode = async () => {
+  if (!qrCodeRef.value || !roomLink.value) return
+  
+  try {
+    // 使用简单的二维码生成方案
+    const qrText = roomLink.value
+    const qrSize = 128
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(qrText)}`
+    
+    qrCodeRef.value.innerHTML = `<img src="${qrUrl}" alt="房间二维码" class="w-full h-full" />`
+    console.log('📡 生成二维码:', qrUrl)
+  } catch (error) {
+    console.error('生成二维码失败:', error)
+    if (qrCodeRef.value) {
+      qrCodeRef.value.innerHTML = '<span class="text-xs text-red-500">二维码生成失败</span>'
+    }
+  }
+}
+
+// 监听分享模态框状态
+watch(showShareModal, async (newValue) => {
+  if (newValue && isHost.value) {
+    await generateRoomLink()
+    await nextTick()
+    await generateQRCode()
+  }
 })
 
 // SEO

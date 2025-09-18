@@ -168,6 +168,21 @@ export const useRoomStore = defineStore('room', () => {
         throw new Error('房间码格式无效')
       }
       
+      // 首先尝试从URL解析房间信息
+      let hostInfo = null
+      if (process.client) {
+        try {
+          const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
+          const urlRoomInfo = parseRoomFromUrl()
+          if (urlRoomInfo && urlRoomInfo.roomCode === roomCode) {
+            hostInfo = urlRoomInfo.hostInfo
+            console.log('📡 从URL解析到房间信息:', hostInfo)
+          }
+        } catch (error) {
+          console.error('解析URL房间信息失败:', error)
+        }
+      }
+      
       // 获取用户信息
       const gameStore = useGameStore()
       let playerId = gameStore.playerId
@@ -187,6 +202,17 @@ export const useRoomStore = defineStore('room', () => {
       currentUserId.value = playerId
       isHost.value = false
       console.log('👥 加入房间 - 设置非房主状态:', { playerId, isHost: isHost.value })
+      
+      // 如果从URL获取到房间信息，先注册到本地信令服务
+      if (hostInfo && process.client) {
+        try {
+          const { signalingService } = await import('~/utils/simpleSignaling')
+          signalingService.registerRoom(hostInfo)
+          console.log('📡 将URL房间信息注册到本地信令服务')
+        } catch (error) {
+          console.error('注册房间信息失败:', error)
+        }
+      }
       
       // 尝试连接到房间
       await connectToRoom(roomCode, playerId, playerName)

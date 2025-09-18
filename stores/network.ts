@@ -578,42 +578,72 @@ export const useNetworkStore = defineStore('network', () => {
     console.log('开始监听客户端连接...')
   }
 
-  // 简化的本地存储信令服务器模拟
+  // 简单信令服务器
   const registerWithSignalingServer = async (roomCode: string, peerId: string, isHost: boolean): Promise<void> => {
-    console.log(`注册到信令服务器: ${roomCode}, ${peerId}, ${isHost ? '房主' : '客户端'}`)
+    console.log(`📡 注册到信令服务器: ${roomCode}, ${peerId}, ${isHost ? '房主' : '客户端'}`)
     
-    if (process.client) {
-      const roomData = {
-        roomCode,
-        hostPeerId: isHost ? peerId : null,
-        timestamp: Date.now()
-      }
-      
-      if (isHost) {
-        // 房主注册房间信息
+    if (process.client && isHost) {
+      try {
+        const { signalingService } = await import('~/utils/simpleSignaling')
+        const gameStore = useGameStore()
+        
+        const roomInfo = {
+          roomCode,
+          hostPeerId: peerId,
+          hostName: gameStore.playerName || '房主',
+          timestamp: Date.now()
+        }
+        
+        signalingService.registerRoom(roomInfo)
+        console.log('📡 房间已注册到信令服务')
+      } catch (error) {
+        console.error('📡 信令服务注册失败:', error)
+        // 降级到localStorage作为备选
+        const roomData = {
+          roomCode,
+          hostPeerId: peerId,
+          timestamp: Date.now()
+        }
         localStorage.setItem(`room_${roomCode}`, JSON.stringify(roomData))
-        console.log('💾 房间信息已保存到localStorage:', roomData)
+        console.log('💾 降级使用localStorage保存房间信息')
       }
     }
   }
 
   const getHostInfo = async (roomCode: string): Promise<{ peerId: string }> => {
-    console.log(`获取房间 ${roomCode} 的房主信息`)
+    console.log(`📡 获取房间 ${roomCode} 的房主信息`)
     
     if (process.client) {
+      try {
+        // 首先尝试从URL解析房间信息
+        const { parseRoomFromUrl } = await import('~/utils/simpleSignaling')
+        const urlRoomInfo = parseRoomFromUrl()
+        
+        if (urlRoomInfo && urlRoomInfo.roomCode === roomCode) {
+          console.log('📡 从URL获取到房主信息:', urlRoomInfo.hostInfo.hostPeerId)
+          return { peerId: urlRoomInfo.hostInfo.hostPeerId }
+        }
+        
+        // 然后尝试信令服务
+        const { signalingService } = await import('~/utils/simpleSignaling')
+        const roomInfo = signalingService.getRoomInfo(roomCode)
+        
+        if (roomInfo) {
+          console.log('📡 从信令服务获取到房主信息:', roomInfo.hostPeerId)
+          return { peerId: roomInfo.hostPeerId }
+        }
+      } catch (error) {
+        console.error('📡 信令服务获取失败，尝试localStorage:', error)
+      }
+      
+      // 降级到localStorage
       const roomDataStr = localStorage.getItem(`room_${roomCode}`)
-      console.log('🔍 从localStorage读取房间信息:', roomDataStr)
       if (roomDataStr) {
         const roomData = JSON.parse(roomDataStr)
-        console.log('📋 解析的房间数据:', roomData)
         if (roomData.hostPeerId) {
-          console.log('✅ 找到房主信息:', roomData.hostPeerId)
+          console.log('💾 从localStorage获取到房主信息:', roomData.hostPeerId)
           return { peerId: roomData.hostPeerId }
-        } else {
-          console.log('❌ 房间数据中没有hostPeerId')
         }
-      } else {
-        console.log('❌ localStorage中没有找到房间信息')
       }
     }
     
