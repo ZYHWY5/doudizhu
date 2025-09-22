@@ -506,12 +506,12 @@ export const useGameStore = defineStore('game', () => {
       console.log(`  - playerName.value: ${playerName.value}`)
       console.log(`  - playerId.value: ${playerId.value}`)
 
-      // 按照用户期望的顺时针顺序排列：底部（真人）→ 左边（上家）→ 右边（下家）
-      // 这样右侧AI叫地主后，下家就是底部玩家，符合用户期望
+      // 固定玩家数组顺序：底部（真人）→ 右边（下家）→ 左边（上家）
+      // 叫地主和抢地主的顺序将根据起始玩家动态计算
       const leftAI = aiPlayers.find(ai => ai.position === 'left')!
       const rightAI = aiPlayers.find(ai => ai.position === 'right')!
       
-      gameState.value.players = [player, leftAI, rightAI]
+      gameState.value.players = [player, rightAI, leftAI]
       gameState.value.phase = 'waiting'
       
       // 🔍 最终玩家列表验证
@@ -523,7 +523,7 @@ export const useGameStore = defineStore('game', () => {
         else if (p.position === 'left') positionDesc = '上家AI'
         console.log(`  [${index}] ${p.name} (ID: ${p.id}, AI: ${p.isAutoPlay}, 位置: ${p.position} - ${positionDesc})`)
       })
-      console.log('🔄 顺时针顺序确认: 底部真人 → 左边上家 → 右边下家')
+      console.log('🔄 固定数组顺序: 底部真人 → 右边下家 → 左边上家')
       
       // 先跳转到游戏页面
       if (process.client) {
@@ -812,6 +812,18 @@ export const useGameStore = defineStore('game', () => {
     }
   }
   
+  // 获取标准的顺时针顺序（根据座位位置）
+  const getStandardClockwiseOrder = (): Player[] => {
+    // 标准顺时针顺序：底部玩家 → 右侧AI(下家) → 左侧AI(上家)
+    const bottomPlayer = gameState.value.players.find(p => p.position === 'bottom')!
+    const rightAI = gameState.value.players.find(p => p.position === 'right')!
+    const leftAI = gameState.value.players.find(p => p.position === 'left')!
+    
+    const standardOrder = [bottomPlayer, rightAI, leftAI]
+    console.log('🔄 标准顺时针顺序:', standardOrder.map(p => `${p.name}(${p.position})`).join(' → '))
+    return standardOrder
+  }
+
   // 获取叫地主阶段的顺时针顺序（从起始玩家开始）
   const getBiddingClockwiseOrder = (): Player[] => {
     if (gameState.value.phase !== 'bidding') {
@@ -844,11 +856,22 @@ export const useGameStore = defineStore('game', () => {
     }
     
     const startPlayerName = gameState.value.players.find(p => p.id === startPlayerId)?.name
+    const startPlayerPos = gameState.value.players.find(p => p.id === startPlayerId)?.position
     const orderDesc = orderedPlayers.map(p => {
       const pos = p.position === 'bottom' ? '底部真人' : p.position === 'right' ? '右边下家' : '左边上家'
       return `${p.name}(${pos})`
     }).join(' → ')
-    console.log(`🔄 叫地主顺时针顺序 (起始: ${startPlayerName}): ${orderDesc}`)
+    
+    let scenarioDesc = ''
+    if (startPlayerPos === 'bottom') {
+      scenarioDesc = '情况1: 底部玩家先叫'
+    } else if (startPlayerPos === 'left') {
+      scenarioDesc = '情况2: 左侧AI先叫'
+    } else if (startPlayerPos === 'right') {
+      scenarioDesc = '情况3: 右侧AI先叫'
+    }
+    
+    console.log(`🔄 叫地主顺时针顺序 (${scenarioDesc}, 起始: ${startPlayerName}): ${orderDesc}`)
     return orderedPlayers
   }
 
@@ -2098,10 +2121,11 @@ export const useGameStore = defineStore('game', () => {
         biddingInfo.landlordCandidateId = playerId
         biddingInfo.phase = 'grabbing'
         
-        // 🔍 抢地主阶段：从叫地主玩家的下家开始（使用固定的玩家顺序）
-        const callerIndex = gameState.value.players.findIndex(p => p.id === playerId)
-        const nextPlayerIndex = (callerIndex + 1) % gameState.value.players.length
-        const nextPlayer = gameState.value.players[nextPlayerIndex]
+        // 🔍 抢地主阶段：从叫地主玩家的下家开始（使用标准顺时针顺序）
+        const standardOrder = getStandardClockwiseOrder()
+        const callerIndex = standardOrder.findIndex(p => p.id === playerId)
+        const nextPlayerIndex = (callerIndex + 1) % standardOrder.length
+        const nextPlayer = standardOrder[nextPlayerIndex]
         
         console.log(`🔄 ${player?.name} 叫地主，进入抢地主阶段`)
         console.log(`🔄 抢地主从叫地主玩家的下家开始: ${nextPlayer.name}(${nextPlayer.position === 'right' ? '右边下家' : nextPlayer.position === 'left' ? '左边上家' : '底部真人'})`)
@@ -2181,8 +2205,8 @@ export const useGameStore = defineStore('game', () => {
     // 获取当前阶段的正确顺序
     let orderedPlayers: Player[]
     if (biddingInfo.phase === 'grabbing') {
-      // 抢地主阶段：使用固定的玩家数组顺序
-      orderedPlayers = gameState.value.players
+      // 抢地主阶段：使用标准顺时针顺序
+      orderedPlayers = getStandardClockwiseOrder()
     } else {
       // 叫地主阶段：使用叫地主顺时针顺序
       orderedPlayers = getBiddingClockwiseOrder()
@@ -2192,7 +2216,7 @@ export const useGameStore = defineStore('game', () => {
     console.log('🔄 proceedToNextBidder 开始:')
     console.log(`  - 当前阶段: ${biddingInfo.phase}`)
     console.log(`  - 当前玩家索引: ${currentIndex}`)
-    console.log(`  - 玩家顺序 (${biddingInfo.phase === 'grabbing' ? '固定数组' : '叫地主顺时针'}):`, 
+    console.log(`  - 玩家顺序 (${biddingInfo.phase === 'grabbing' ? '标准顺时针' : '叫地主顺时针'}):`, 
       orderedPlayers.map((p, i) => `[${i}]${p.name}(${p.position})`).join(' → '))
     console.log(`  - 已有决策:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
     
