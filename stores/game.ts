@@ -506,11 +506,12 @@ export const useGameStore = defineStore('game', () => {
       console.log(`  - playerName.value: ${playerName.value}`)
       console.log(`  - playerId.value: ${playerId.value}`)
 
-      // 按照正确的顺时针顺序排列：底部（真人）→ 右边（下家）→ 左边（上家）
+      // 按照用户期望的顺时针顺序排列：底部（真人）→ 左边（上家）→ 右边（下家）
+      // 这样右侧AI叫地主后，下家就是底部玩家，符合用户期望
       const leftAI = aiPlayers.find(ai => ai.position === 'left')!
       const rightAI = aiPlayers.find(ai => ai.position === 'right')!
       
-      gameState.value.players = [player, rightAI, leftAI]
+      gameState.value.players = [player, leftAI, rightAI]
       gameState.value.phase = 'waiting'
       
       // 🔍 最终玩家列表验证
@@ -522,7 +523,7 @@ export const useGameStore = defineStore('game', () => {
         else if (p.position === 'left') positionDesc = '上家AI'
         console.log(`  [${index}] ${p.name} (ID: ${p.id}, AI: ${p.isAutoPlay}, 位置: ${p.position} - ${positionDesc})`)
       })
-      console.log('🔄 顺时针顺序确认: 底部真人 → 右边下家 → 左边上家')
+      console.log('🔄 顺时针顺序确认: 底部真人 → 左边上家 → 右边下家')
       
       // 先跳转到游戏页面
       if (process.client) {
