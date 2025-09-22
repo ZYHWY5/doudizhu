@@ -808,21 +808,21 @@ export const useGameStore = defineStore('game', () => {
       return gameState.value.players
     }
     
-    // 在叫地主阶段，找到第一个叫地主的玩家作为起始点
     const biddingInfo = gameState.value.biddingInfo
-    if (biddingInfo.bids.length === 0) {
-      // 如果还没有任何决策，按原始顺序
-      return gameState.value.players
+    let startPlayerId: string
+    
+    // 确定起始玩家
+    if (biddingInfo.bids.length > 0) {
+      // 如果已有决策，使用第一个做决策的玩家作为起始点
+      startPlayerId = biddingInfo.bids[0].playerId
+    } else {
+      // 如果还没有任何决策，使用当前应该做决策的玩家作为起始点
+      startPlayerId = biddingInfo.currentBidderId || gameState.value.players[0].id
     }
     
-    // 找到第一个做决策的玩家（起始玩家）
-    const firstBidderId = biddingInfo.bids[0]?.playerId
-    if (!firstBidderId) {
-      return gameState.value.players
-    }
-    
-    const startIndex = gameState.value.players.findIndex(p => p.id === firstBidderId)
+    const startIndex = gameState.value.players.findIndex(p => p.id === startPlayerId)
     if (startIndex === -1) {
+      console.warn('🚨 getBiddingClockwiseOrder: 找不到起始玩家，使用原始顺序')
       return gameState.value.players
     }
     
@@ -833,7 +833,7 @@ export const useGameStore = defineStore('game', () => {
       orderedPlayers.push(gameState.value.players[index])
     }
     
-    console.log('🔄 叫地主顺时针顺序:', orderedPlayers.map(p => p.name).join(' → '))
+    console.log('🔄 叫地主顺时针顺序 (起始:', gameState.value.players.find(p => p.id === startPlayerId)?.name + '):', orderedPlayers.map(p => p.name).join(' → '))
     return orderedPlayers
   }
 
@@ -2126,24 +2126,8 @@ export const useGameStore = defineStore('game', () => {
         return
       }
       
-      // 检查当前玩家是否应该跳过（如果是叫地主的玩家）
-      if (biddingInfo.currentBidderId === callerId) {
-        console.log('跳过叫地主的玩家，继续下一个')
-        proceedToNextBidder()
-        return
-      }
-      
-      // 检查当前玩家是否已经做过抢地主决策
-      const currentPlayerDecision = grabPhaseDecisions.find(d => d.playerId === biddingInfo.currentBidderId)
-      if (currentPlayerDecision) {
-        console.log('当前玩家已做过决策，继续下一个')
-        proceedToNextBidder()
-        return
-      }
-      
-      // 如果还有玩家需要做决策，重置计时器等待
-      console.log('等待玩家', gameState.value.players.find(p => p.id === biddingInfo.currentBidderId)?.name, '做抢地主决策')
-      turnTimeLeft.value = settings.value.autoPlayTimeout
+      // 继续到下一个玩家或等待当前玩家决策
+      proceedToNextBidder()
     }
   }
   
@@ -2153,7 +2137,7 @@ export const useGameStore = defineStore('game', () => {
     
     // 获取当前阶段的正确顺序
     const orderedPlayers = getBiddingClockwiseOrder()
-    const currentIndex = orderedPlayers.findIndex(p => p.id === biddingInfo.currentBidderId)
+    let currentIndex = orderedPlayers.findIndex(p => p.id === biddingInfo.currentBidderId)
     
     console.log('🔄 proceedToNextBidder 开始:')
     console.log(`  - 当前阶段: ${biddingInfo.phase}`)
@@ -2167,7 +2151,59 @@ export const useGameStore = defineStore('game', () => {
       return
     }
     
-    // 在抢地主阶段，需要特殊处理
+    // 🔍 检查当前玩家是否应该被跳过
+    const shouldSkipCurrentPlayer = () => {
+      if (biddingInfo.phase === 'grabbing') {
+        const callerId = biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
+        const grabPhaseDecisions = biddingInfo.bids.filter(bid => 
+          bid.playerId !== callerId && (bid.bid === 'grab' || bid.bid === 'pass')
+        )
+        
+        // 跳过叫地主的玩家
+        if (biddingInfo.currentBidderId === callerId) {
+          console.log('🔄 当前玩家是叫地主的玩家，需要跳过')
+          return true
+        }
+        
+        // 跳过已经做过抢地主决策的玩家
+        const hasDecision = grabPhaseDecisions.some(d => d.playerId === biddingInfo.currentBidderId)
+        if (hasDecision) {
+          console.log('🔄 当前玩家已经做过抢地主决策，需要跳过')
+          return true
+        }
+      } else if (biddingInfo.phase === 'calling') {
+        // 在叫地主阶段，跳过已经做过决策的玩家
+        const hasDecision = biddingInfo.bids.some(bid => bid.playerId === biddingInfo.currentBidderId)
+        if (hasDecision) {
+          console.log('🔄 当前玩家已经做过叫地主决策，需要跳过')
+          return true
+        }
+      }
+      
+      return false
+    }
+    
+    // 如果当前玩家需要被跳过，立即移动到下一个玩家（带递归保护）
+    let skipAttempts = 0
+    const maxSkipAttempts = orderedPlayers.length
+    
+    while (shouldSkipCurrentPlayer() && skipAttempts < maxSkipAttempts) {
+      console.log('🔄 跳过当前玩家，移动到下一个')
+      currentIndex = (currentIndex + 1) % orderedPlayers.length
+      biddingInfo.currentBidderId = orderedPlayers[currentIndex].id
+      skipAttempts++
+    }
+    
+    if (skipAttempts >= maxSkipAttempts) {
+      console.error('🚨 跳过玩家次数过多，可能存在逻辑错误')
+      reshuffleCards()
+      return
+    }
+    
+    // 重置计时器
+    turnTimeLeft.value = settings.value.autoPlayTimeout
+    
+    // 检查阶段完成条件
     if (biddingInfo.phase === 'grabbing') {
       const callerId = biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
       const otherPlayers = orderedPlayers.filter(p => p.id !== callerId)
@@ -2175,10 +2211,9 @@ export const useGameStore = defineStore('game', () => {
         bid.playerId !== callerId && (bid.bid === 'grab' || bid.bid === 'pass')
       )
       
-      console.log('🔄 抢地主阶段检查:')
-      console.log(`  - 叫地主玩家: ${callerId}`)
-      console.log(`  - 需要抢地主的玩家: ${otherPlayers.map(p => p.name).join(', ')}`)
-      console.log(`  - 已做决策的玩家: ${grabPhaseDecisions.map(d => gameState.value.players.find(p => p.id === d.playerId)?.name + ':' + d.bid).join(', ')}`)
+      console.log('🔄 抢地主阶段状态检查:')
+      console.log(`  - 需要决策的玩家数: ${otherPlayers.length}`)
+      console.log(`  - 已决策的玩家数: ${grabPhaseDecisions.length}`)
       
       // 如果所有需要抢地主的玩家都已经决策完毕，直接确定地主
       if (grabPhaseDecisions.length >= otherPlayers.length) {
@@ -2186,46 +2221,23 @@ export const useGameStore = defineStore('game', () => {
         confirmLandlord(biddingInfo.landlordCandidateId!)
         return
       }
-      
-      // 寻找下一个需要做抢地主决策的玩家（按叫地主顺时针顺序）
-      let nextIndex = (currentIndex + 1) % orderedPlayers.length
-      let attempts = 0
-      const maxAttempts = orderedPlayers.length
-      
-      while (attempts < maxAttempts) {
-        const nextPlayer = orderedPlayers[nextIndex]
-        
-        // 跳过叫地主的玩家
-        if (nextPlayer.id === callerId) {
-          console.log(`🔄 跳过叫地主的玩家: ${nextPlayer.name}`)
-          nextIndex = (nextIndex + 1) % orderedPlayers.length
-          attempts++
-          continue
+    } else if (biddingInfo.phase === 'calling') {
+      // 检查叫地主阶段是否完成
+      if (biddingInfo.bids.length >= orderedPlayers.length) {
+        const callers = biddingInfo.bids.filter(bid => bid.bid === 'call')
+        if (callers.length === 0) {
+          console.log('🔄 所有玩家都不叫地主，重新洗牌')
+          reshuffleCards()
+          return
+        } else {
+          console.log('🔄 叫地主阶段完成，确定地主:', callers[0].playerId)
+          confirmLandlord(callers[0].playerId)
+          return
         }
-        
-        // 检查这个玩家是否已经做过抢地主决策
-        const hasDecision = grabPhaseDecisions.some(d => d.playerId === nextPlayer.id)
-        if (hasDecision) {
-          console.log(`🔄 跳过已做决策的玩家: ${nextPlayer.name}`)
-          nextIndex = (nextIndex + 1) % orderedPlayers.length
-          attempts++
-          continue
-        }
-        
-        // 找到了需要做决策的玩家
-        console.log(`🔄 找到下一个需要抢地主决策的玩家: ${nextPlayer.name}`)
-        biddingInfo.currentBidderId = nextPlayer.id
-        turnTimeLeft.value = settings.value.autoPlayTimeout
-        return
       }
-      
-      // 如果循环了一圈都没找到，说明所有人都决策完了
-      console.log('🔄 循环检查后，所有玩家都已完成抢地主决策')
-      confirmLandlord(biddingInfo.landlordCandidateId!)
-      return
     }
     
-    // 叫地主阶段的正常处理（按叫地主顺时针顺序）
+    // 正常处理：移动到下一个玩家（按叫地主顺时针顺序）
     const nextIndex = (currentIndex + 1) % orderedPlayers.length
     const nextPlayer = orderedPlayers[nextIndex]
     const oldCurrentBidderId = biddingInfo.currentBidderId
@@ -2235,9 +2247,7 @@ export const useGameStore = defineStore('game', () => {
     console.log(`  - 旧的currentBidderId: ${oldCurrentBidderId}`)
     console.log(`  - 新的currentBidderId: ${biddingInfo.currentBidderId}`)
     
-    // 重置回合计时器（保持托管状态）
-    turnTimeLeft.value = settings.value.autoPlayTimeout
-    // 注意：不重置托管状态，让用户自己控制
+    // 注意：计时器已经在前面重置过了
   }
   
   // 确定地主
