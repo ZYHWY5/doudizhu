@@ -1117,12 +1117,23 @@ export const useGameStore = defineStore('game', () => {
     if (currentPlayer.isAutoPlay) {
       console.log('AI玩家回合，准备执行操作:', currentPlayer.name)
       
+      // 🔍 检查在叫地主阶段该AI是否已经做过决策
+      if (gameState.value.phase === 'bidding') {
+        const existingDecision = gameState.value.biddingInfo.bids.find(bid => bid.playerId === currentPlayer.id)
+        if (existingDecision) {
+          console.log(`🔍 AI ${currentPlayer.name} 已经做过决策 (${existingDecision.bid})，跳过处理并进入下一个玩家`)
+          proceedToNextBidder()
+          return
+        }
+      }
+      
       // AI玩家只需要很短的思考时间（1-3秒），让玩家看清楚是哪个AI在操作
       if (turnTimeLeft.value > 42) {
         turnTimeLeft.value--
         return // 给AI一点思考时间，但不会太长
       }
       
+      // 🔒 设置AI处理标志，防止重复处理
       aiProcessing.value = true
       
       try {
@@ -1132,7 +1143,10 @@ export const useGameStore = defineStore('game', () => {
       } catch (error) {
         console.error('AI回合处理失败:', error)
       } finally {
-        aiProcessing.value = false
+        // 🔓 AI处理完成后延迟释放锁，防止立即重复处理
+        setTimeout(() => {
+          aiProcessing.value = false
+        }, 500)
       }
       return // AI处理完成后立即返回，不继续处理计时器
     }
@@ -1234,19 +1248,29 @@ export const useGameStore = defineStore('game', () => {
     console.log(`🤖 executeAIDecision: ${player.name} 准备执行决策 ${decision.decision} (阶段: ${gameState.value.phase})`)
     
     if (gameState.value.phase === 'bidding') {
-      // 🚨 额外验证：确保轮到该AI玩家
+      // 🚨 第一重验证：确保轮到该AI玩家
       if (gameState.value.biddingInfo.currentBidderId !== player.id) {
         console.error(`🚨 AI ${player.name} 试图在非自己回合做决策，当前应该是 ${gameState.value.players.find(p => p.id === gameState.value.biddingInfo.currentBidderId)?.name} 的回合`)
         return
       }
       
-      // 🚨 额外验证：确保该AI玩家还没有做过决策
+      // 🚨 第二重验证：确保该AI玩家还没有做过决策
       const existingDecision = gameState.value.biddingInfo.bids.find(bid => bid.playerId === player.id)
       if (existingDecision) {
         console.error(`🚨 AI ${player.name} 已经做过决策 (${existingDecision.bid})，不能重复决策`)
         return
       }
       
+      // 🚨 第三重验证：在抢地主阶段，确保不是叫地主的玩家
+      if (gameState.value.biddingInfo.phase === 'grabbing') {
+        const callerId = gameState.value.biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
+        if (callerId === player.id) {
+          console.error(`🚨 AI ${player.name} 是叫地主的玩家，在抢地主阶段不应该再次决策`)
+          return
+        }
+      }
+      
+      console.log(`✅ AI ${player.name} 验证通过，执行决策: ${decision.decision}`)
       await handleBidLandlord(player.id, decision.decision)
     } else if (gameState.value.phase === 'multiplier') {
       handleMultiplierDecision(player.id, decision.decision)
