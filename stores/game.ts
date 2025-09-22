@@ -2271,6 +2271,35 @@ export const useGameStore = defineStore('game', () => {
         confirmLandlord(biddingInfo.landlordCandidateId!)
         return
       }
+      
+      // 抢地主阶段：找到下一个需要决策的玩家
+      console.log('🔄 抢地主阶段：寻找下一个需要决策的玩家')
+      let nextPlayerIndex = (currentIndex + 1) % orderedPlayers.length
+      let attempts = 0
+      const maxAttempts = orderedPlayers.length
+      
+      while (attempts < maxAttempts) {
+        const nextPlayer = orderedPlayers[nextPlayerIndex]
+        const isCallPlayer = nextPlayer.id === callerId
+        const hasDecision = biddingInfo.bids.some(bid => 
+          bid.playerId === nextPlayer.id && (bid.bid === 'grab' || bid.bid === 'pass')
+        )
+        
+        console.log(`🔄 检查玩家 ${nextPlayer.name}: 是否是叫地主玩家=${isCallPlayer}, 是否已决策=${hasDecision}`)
+        
+        if (!isCallPlayer && !hasDecision) {
+          console.log(`🔄 找到下一个需要决策的玩家: ${nextPlayer.name}`)
+          biddingInfo.currentBidderId = nextPlayer.id
+          return
+        }
+        
+        nextPlayerIndex = (nextPlayerIndex + 1) % orderedPlayers.length
+        attempts++
+      }
+      
+      console.error('🚨 抢地主阶段：找不到下一个需要决策的玩家，强制确定地主')
+      confirmLandlord(biddingInfo.landlordCandidateId!)
+      return
     } else if (biddingInfo.phase === 'calling') {
       // 检查叫地主阶段是否完成
       if (biddingInfo.bids.length >= orderedPlayers.length) {
