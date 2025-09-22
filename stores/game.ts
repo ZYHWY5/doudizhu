@@ -470,7 +470,7 @@ export const useGameStore = defineStore('game', () => {
           isReady: true,
           isOnline: true,
           isAutoPlay: true,
-          position: 'left' as const  // 真人玩家的下家
+          position: 'left' as const  // 真人玩家的上家
         },
         {
           id: 'ai-2', 
@@ -479,7 +479,7 @@ export const useGameStore = defineStore('game', () => {
           isReady: true,
           isOnline: true,
           isAutoPlay: true,
-          position: 'right' as const  // 真人玩家的上家
+          position: 'right' as const  // 真人玩家的下家
         }
       ]
       
@@ -506,11 +506,11 @@ export const useGameStore = defineStore('game', () => {
       console.log(`  - playerName.value: ${playerName.value}`)
       console.log(`  - playerId.value: ${playerId.value}`)
 
-      // 按照正确的顺时针顺序排列：底部（真人）→ 左边（下家）→ 右边（上家）
+      // 按照正确的顺时针顺序排列：底部（真人）→ 右边（下家）→ 左边（上家）
       const leftAI = aiPlayers.find(ai => ai.position === 'left')!
       const rightAI = aiPlayers.find(ai => ai.position === 'right')!
       
-      gameState.value.players = [player, leftAI, rightAI]
+      gameState.value.players = [player, rightAI, leftAI]
       gameState.value.phase = 'waiting'
       
       // 🔍 最终玩家列表验证
@@ -518,11 +518,11 @@ export const useGameStore = defineStore('game', () => {
       gameState.value.players.forEach((p, index) => {
         let positionDesc = ''
         if (p.position === 'bottom') positionDesc = '真人玩家'
-        else if (p.position === 'left') positionDesc = '下家AI'
-        else if (p.position === 'right') positionDesc = '上家AI'
+        else if (p.position === 'right') positionDesc = '下家AI'
+        else if (p.position === 'left') positionDesc = '上家AI'
         console.log(`  [${index}] ${p.name} (ID: ${p.id}, AI: ${p.isAutoPlay}, 位置: ${p.position} - ${positionDesc})`)
       })
-      console.log('🔄 顺时针顺序确认: 底部真人 → 左边下家 → 右边上家')
+      console.log('🔄 顺时针顺序确认: 底部真人 → 右边下家 → 左边上家')
       
       // 先跳转到游戏页面
       if (process.client) {
@@ -844,7 +844,7 @@ export const useGameStore = defineStore('game', () => {
     
     const startPlayerName = gameState.value.players.find(p => p.id === startPlayerId)?.name
     const orderDesc = orderedPlayers.map(p => {
-      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'left' ? '左边下家' : '右边上家'
+      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'right' ? '右边下家' : '左边上家'
       return `${p.name}(${pos})`
     }).join(' → ')
     console.log(`🔄 叫地主顺时针顺序 (起始: ${startPlayerName}): ${orderDesc}`)
@@ -871,7 +871,7 @@ export const useGameStore = defineStore('game', () => {
     }
     
     const orderDesc = orderedPlayers.map(p => {
-      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'left' ? '左边下家' : '右边上家'
+      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'right' ? '右边下家' : '左边上家'
       return `${p.name}(${pos})`
     }).join(' → ')
     console.log(`🔄 地主顺时针顺序: ${orderDesc}`)
@@ -2088,7 +2088,7 @@ export const useGameStore = defineStore('game', () => {
         const nextPlayer = orderedPlayers[nextPlayerIndex]
         
         console.log(`🔄 ${player?.name} 叫地主，进入抢地主阶段`)
-        console.log(`🔄 抢地主从叫地主玩家的下家开始: ${nextPlayer.name}(${nextPlayer.position === 'left' ? '左边下家' : nextPlayer.position === 'right' ? '右边上家' : '底部真人'})`)
+        console.log(`🔄 抢地主从叫地主玩家的下家开始: ${nextPlayer.name}(${nextPlayer.position === 'right' ? '右边下家' : nextPlayer.position === 'left' ? '左边上家' : '底部真人'})`)
         
         // 设置下一个玩家为抢地主的起始玩家
         biddingInfo.currentBidderId = nextPlayer.id
@@ -2171,7 +2171,7 @@ export const useGameStore = defineStore('game', () => {
     console.log(`  - 当前玩家索引: ${currentIndex}`)
     console.log(`  - 已有决策:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
     const orderDesc = orderedPlayers.map(p => {
-      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'left' ? '左边下家' : '右边上家'
+      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'right' ? '右边下家' : '左边上家'
       return `${p.name}(${pos})`
     }).join(' → ')
     console.log(`  - 叫地主顺时针顺序: ${orderDesc}`)
