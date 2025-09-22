@@ -1113,64 +1113,52 @@ export const useGameStore = defineStore('game', () => {
     console.log('玩家ID:', currentPlayer.id, '是否是当前用户:', playerId.value === currentPlayer.id, '是否是人类玩家:', !currentPlayer.isAutoPlay)
     console.log('剩余时间:', turnTimeLeft.value)
     
-    // 如果是AI玩家，给一个短暂延迟让界面更新，然后执行操作
-    if (currentPlayer.isAutoPlay) {
-      console.log('AI玩家回合，准备执行操作:', currentPlayer.name)
+    // 检查是否需要AI处理（真AI玩家 或 托管模式下的人类玩家）
+    const needsAIProcessing = currentPlayer.isAutoPlay || (!currentPlayer.isAutoPlay && autoPlayEnabled.value)
+    
+    if (needsAIProcessing) {
+      const playerType = currentPlayer.isAutoPlay ? 'AI玩家' : '托管玩家'
+      console.log(`${playerType}回合，准备执行操作:`, currentPlayer.name)
       
-      // 🔍 检查在叫地主阶段该AI是否已经做过决策
+      // 🔍 检查在叫地主阶段该玩家是否已经做过决策
       if (gameState.value.phase === 'bidding') {
         const existingDecision = gameState.value.biddingInfo.bids.find(bid => bid.playerId === currentPlayer.id)
         if (existingDecision) {
-          console.log(`🔍 AI ${currentPlayer.name} 已经做过决策 (${existingDecision.bid})，跳过处理并进入下一个玩家`)
+          console.log(`🔍 ${playerType} ${currentPlayer.name} 已经做过决策 (${existingDecision.bid})，跳过处理并进入下一个玩家`)
           proceedToNextBidder()
           return
         }
       }
       
-      // AI玩家只需要很短的思考时间（1-3秒），让玩家看清楚是哪个AI在操作
+      // AI玩家或托管玩家需要很短的思考时间（1-3秒），让玩家看清楚是哪个玩家在操作
       if (turnTimeLeft.value > 42) {
         turnTimeLeft.value--
-        return // 给AI一点思考时间，但不会太长
+        return // 给一点思考时间，但不会太长
       }
       
       // 🔒 设置AI处理标志，防止重复处理
       aiProcessing.value = true
       
       try {
-        console.log('即将调用 processAITurn for:', currentPlayer.name)
+        console.log(`即将调用 processAITurn for: ${currentPlayer.name} (${playerType})`)
         await processAITurn(currentPlayer)
-        console.log('processAITurn 完成 for:', currentPlayer.name)
+        console.log(`processAITurn 完成 for: ${currentPlayer.name} (${playerType})`)
       } catch (error) {
-        console.error('AI回合处理失败:', error)
+        console.error(`${playerType}处理失败:`, error)
       } finally {
-        // 🔓 AI处理完成后延迟释放锁，防止立即重复处理
+        // 🔓 处理完成后延迟释放锁，防止立即重复处理
         setTimeout(() => {
           aiProcessing.value = false
         }, 500)
       }
-      return // AI处理完成后立即返回，不继续处理计时器
+      return // 处理完成后立即返回，不继续处理计时器
     }
     
-    // 只有人类玩家才需要完整的计时器逻辑
-    const isHumanPlayer = !currentPlayer.isAutoPlay
-    
-    // 如果是人类玩家且开启了托管
-    if (isHumanPlayer && autoPlayEnabled.value) {
-      console.log('人类玩家托管模式，执行AI操作:', currentPlayer.name)
-      aiProcessing.value = true
-      
-      try {
-        await processAITurn(currentPlayer)
-      } catch (error) {
-        console.error('托管AI处理失败:', error)
-      } finally {
-        aiProcessing.value = false
-      }
-      return // 托管处理完成后返回
-    }
+    // 只有非托管的人类玩家才需要完整的计时器逻辑
+    const isHumanPlayer = !currentPlayer.isAutoPlay && !autoPlayEnabled.value
     
     // 人类玩家正常回合，更新计时器
-    if (isHumanPlayer && !autoPlayEnabled.value) {
+    if (isHumanPlayer) {
       if (turnTimeLeft.value > 0) {
         const oldTime = turnTimeLeft.value
         turnTimeLeft.value--
