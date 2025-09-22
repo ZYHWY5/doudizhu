@@ -470,7 +470,7 @@ export const useGameStore = defineStore('game', () => {
           isReady: true,
           isOnline: true,
           isAutoPlay: true,
-          position: 'top' as const
+          position: 'left' as const  // 真人玩家的下家
         },
         {
           id: 'ai-2', 
@@ -479,7 +479,7 @@ export const useGameStore = defineStore('game', () => {
           isReady: true,
           isOnline: true,
           isAutoPlay: true,
-          position: 'left' as const
+          position: 'right' as const  // 真人玩家的上家
         }
       ]
       
@@ -506,14 +506,23 @@ export const useGameStore = defineStore('game', () => {
       console.log(`  - playerName.value: ${playerName.value}`)
       console.log(`  - playerId.value: ${playerId.value}`)
 
-      gameState.value.players = [player, ...aiPlayers]
+      // 按照正确的顺时针顺序排列：底部（真人）→ 左边（下家）→ 右边（上家）
+      const leftAI = aiPlayers.find(ai => ai.position === 'left')!
+      const rightAI = aiPlayers.find(ai => ai.position === 'right')!
+      
+      gameState.value.players = [player, leftAI, rightAI]
       gameState.value.phase = 'waiting'
       
       // 🔍 最终玩家列表验证
-      console.log('🔍 最终玩家列表:')
+      console.log('🔍 最终玩家列表（顺时针顺序）:')
       gameState.value.players.forEach((p, index) => {
-        console.log(`  [${index}] ${p.name} (ID: ${p.id}, AI: ${p.isAutoPlay}, 位置: ${p.position})`)
+        let positionDesc = ''
+        if (p.position === 'bottom') positionDesc = '真人玩家'
+        else if (p.position === 'left') positionDesc = '下家AI'
+        else if (p.position === 'right') positionDesc = '上家AI'
+        console.log(`  [${index}] ${p.name} (ID: ${p.id}, AI: ${p.isAutoPlay}, 位置: ${p.position} - ${positionDesc})`)
       })
+      console.log('🔄 顺时针顺序确认: 底部真人 → 左边下家 → 右边上家')
       
       // 先跳转到游戏页面
       if (process.client) {
@@ -833,7 +842,12 @@ export const useGameStore = defineStore('game', () => {
       orderedPlayers.push(gameState.value.players[index])
     }
     
-    console.log('🔄 叫地主顺时针顺序 (起始:', gameState.value.players.find(p => p.id === startPlayerId)?.name + '):', orderedPlayers.map(p => p.name).join(' → '))
+    const startPlayerName = gameState.value.players.find(p => p.id === startPlayerId)?.name
+    const orderDesc = orderedPlayers.map(p => {
+      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'left' ? '左边下家' : '右边上家'
+      return `${p.name}(${pos})`
+    }).join(' → ')
+    console.log(`🔄 叫地主顺时针顺序 (起始: ${startPlayerName}): ${orderDesc}`)
     return orderedPlayers
   }
 
@@ -856,7 +870,11 @@ export const useGameStore = defineStore('game', () => {
       orderedPlayers.push(gameState.value.players[index])
     }
     
-    console.log('🔄 地主顺时针顺序:', orderedPlayers.map(p => p.name).join(' → '))
+    const orderDesc = orderedPlayers.map(p => {
+      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'left' ? '左边下家' : '右边上家'
+      return `${p.name}(${pos})`
+    }).join(' → ')
+    console.log(`🔄 地主顺时针顺序: ${orderDesc}`)
     return orderedPlayers
   }
 
@@ -2143,7 +2161,11 @@ export const useGameStore = defineStore('game', () => {
     console.log(`  - 当前阶段: ${biddingInfo.phase}`)
     console.log(`  - 当前玩家索引: ${currentIndex}`)
     console.log(`  - 已有决策:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
-    console.log(`  - 叫地主顺时针顺序:`, orderedPlayers.map(p => p.name).join(' → '))
+    const orderDesc = orderedPlayers.map(p => {
+      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'left' ? '左边下家' : '右边上家'
+      return `${p.name}(${pos})`
+    }).join(' → ')
+    console.log(`  - 叫地主顺时针顺序: ${orderDesc}`)
     
     if (currentIndex === -1) {
       console.error('🚨 proceedToNextBidder: 找不到当前玩家，强制重新洗牌')
