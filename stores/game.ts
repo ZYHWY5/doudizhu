@@ -2081,9 +2081,18 @@ export const useGameStore = defineStore('game', () => {
         biddingInfo.landlordCandidateId = playerId
         biddingInfo.phase = 'grabbing'
         
+        // 🔍 抢地主阶段：从叫地主玩家的下家开始
+        const orderedPlayers = getBiddingClockwiseOrder()
+        const callerIndex = orderedPlayers.findIndex(p => p.id === playerId)
+        const nextPlayerIndex = (callerIndex + 1) % orderedPlayers.length
+        const nextPlayer = orderedPlayers[nextPlayerIndex]
         
-        // 继续下一个玩家（抢地主）
-        proceedToNextBidder()
+        console.log(`🔄 ${player?.name} 叫地主，进入抢地主阶段`)
+        console.log(`🔄 抢地主从叫地主玩家的下家开始: ${nextPlayer.name}(${nextPlayer.position === 'left' ? '左边下家' : nextPlayer.position === 'right' ? '右边上家' : '底部真人'})`)
+        
+        // 设置下一个玩家为抢地主的起始玩家
+        biddingInfo.currentBidderId = nextPlayer.id
+        turnTimeLeft.value = settings.value.autoPlayTimeout
         return
       }
       
