@@ -945,6 +945,56 @@ export const useGameStore = defineStore('game', () => {
     turnTimeLeft.value = settings.value.autoPlayTimeout
   }
   
+  // 进入下一个需要倍数决策的玩家（智能跳过已决策的玩家）
+  const proceedToNextMultiplier = () => {
+    const multiplierInfo = gameState.value.multiplierInfo
+    const currentIndex = gameState.value.players.findIndex(p => p.id === multiplierInfo.currentPlayerId)
+    
+    console.log('🔄 proceedToNextMultiplier 开始:')
+    console.log(`  - 当前玩家索引: ${currentIndex}`)
+    console.log(`  - 已做决策的玩家:`, multiplierInfo.decisions.map(d => `${d.playerName}:${d.action}`))
+    
+    if (currentIndex === -1) {
+      console.error('🚨 proceedToNextMultiplier: 找不到当前玩家')
+      return
+    }
+    
+    // 检查是否所有玩家都已经做出决策
+    if (multiplierInfo.decisions.length >= gameState.value.players.length) {
+      console.log('🔄 所有玩家已完成倍数决策，开始出牌阶段')
+      startPlayingPhase()
+      return
+    }
+    
+    // 寻找下一个需要做倍数决策的玩家
+    let nextIndex = (currentIndex + 1) % gameState.value.players.length
+    let attempts = 0
+    const maxAttempts = gameState.value.players.length
+    
+    while (attempts < maxAttempts) {
+      const nextPlayer = gameState.value.players[nextIndex]
+      
+      // 检查这个玩家是否已经做过倍数决策
+      const hasDecision = multiplierInfo.decisions.some(d => d.playerId === nextPlayer.id)
+      if (hasDecision) {
+        console.log(`🔄 跳过已做倍数决策的玩家: ${nextPlayer.name}`)
+        nextIndex = (nextIndex + 1) % gameState.value.players.length
+        attempts++
+        continue
+      }
+      
+      // 找到了需要做决策的玩家
+      console.log(`🔄 找到下一个需要倍数决策的玩家: ${nextPlayer.name}`)
+      multiplierInfo.currentPlayerId = nextPlayer.id
+      turnTimeLeft.value = settings.value.autoPlayTimeout
+      return
+    }
+    
+    // 如果循环了一圈都没找到，说明所有人都决策完了
+    console.log('🔄 循环检查后，所有玩家都已完成倍数决策')
+    startPlayingPhase()
+  }
+  
   // 开始出牌阶段
   const startPlayingPhase = () => {
     console.log('🎮 开始出牌阶段，最终倍数:', gameState.value.multiplierInfo.multiplier)
@@ -1120,12 +1170,19 @@ export const useGameStore = defineStore('game', () => {
       const playerType = currentPlayer.isAutoPlay ? 'AI玩家' : '托管玩家'
       console.log(`${playerType}回合，准备执行操作:`, currentPlayer.name)
       
-      // 🔍 检查在叫地主阶段该玩家是否已经做过决策
+      // 🔍 检查该玩家是否已经做过决策
       if (gameState.value.phase === 'bidding') {
         const existingDecision = gameState.value.biddingInfo.bids.find(bid => bid.playerId === currentPlayer.id)
         if (existingDecision) {
-          console.log(`🔍 ${playerType} ${currentPlayer.name} 已经做过决策 (${existingDecision.bid})，跳过处理并进入下一个玩家`)
+          console.log(`🔍 ${playerType} ${currentPlayer.name} 已经做过叫地主决策 (${existingDecision.bid})，跳过处理并进入下一个玩家`)
           proceedToNextBidder()
+          return
+        }
+      } else if (gameState.value.phase === 'multiplier') {
+        const existingDecision = gameState.value.multiplierInfo.decisions.find(d => d.playerId === currentPlayer.id)
+        if (existingDecision) {
+          console.log(`🔍 ${playerType} ${currentPlayer.name} 已经做过倍数决策 (${existingDecision.action})，跳过处理并进入下一个玩家`)
+          proceedToNextMultiplier()
           return
         }
       }
