@@ -802,17 +802,45 @@ export const useGameStore = defineStore('game', () => {
     }
   }
   
-  // 获取下一个玩家
+  // 获取地主顺时针的玩家顺序
+  const getLandlordClockwiseOrder = (): Player[] => {
+    if (!gameState.value.landlordId) {
+      // 如果还没有地主，按原始顺序
+      return gameState.value.players
+    }
+    
+    const landlordIndex = gameState.value.players.findIndex(p => p.id === gameState.value.landlordId)
+    if (landlordIndex === -1) {
+      return gameState.value.players
+    }
+    
+    // 从地主开始，按顺时针顺序排列
+    const orderedPlayers = []
+    for (let i = 0; i < gameState.value.players.length; i++) {
+      const index = (landlordIndex + i) % gameState.value.players.length
+      orderedPlayers.push(gameState.value.players[index])
+    }
+    
+    console.log('🔄 地主顺时针顺序:', orderedPlayers.map(p => p.name).join(' → '))
+    return orderedPlayers
+  }
+
+  // 获取下一个玩家（按地主顺时针）
   const getNextPlayer = () => {
-    const currentIndex = gameState.value.players.findIndex(p => p.id === gameState.value.currentPlayerId)
-    const nextIndex = (currentIndex + 1) % gameState.value.players.length
-    return gameState.value.players[nextIndex]
+    const orderedPlayers = getLandlordClockwiseOrder()
+    const currentIndex = orderedPlayers.findIndex(p => p.id === gameState.value.currentPlayerId)
+    const nextIndex = (currentIndex + 1) % orderedPlayers.length
+    return orderedPlayers[nextIndex]
   }
 
   const nextTurn = () => {
-    const currentIndex = gameState.value.players.findIndex(p => p.id === gameState.value.currentPlayerId)
-    const nextIndex = (currentIndex + 1) % gameState.value.players.length
-    gameState.value.currentPlayerId = gameState.value.players[nextIndex].id
+    const orderedPlayers = getLandlordClockwiseOrder()
+    const currentIndex = orderedPlayers.findIndex(p => p.id === gameState.value.currentPlayerId)
+    const nextIndex = (currentIndex + 1) % orderedPlayers.length
+    const nextPlayer = orderedPlayers[nextIndex]
+    
+    console.log(`🔄 nextTurn: ${gameState.value.players.find(p => p.id === gameState.value.currentPlayerId)?.name} → ${nextPlayer.name}`)
+    gameState.value.currentPlayerId = nextPlayer.id
     gameState.value.turn++
     
     // 重置回合计时器（保持托管状态）
@@ -853,9 +881,12 @@ export const useGameStore = defineStore('game', () => {
     // 切换到倍数阶段
     gameState.value.phase = 'multiplier'
     
-    // 重置倍数信息
+    // 获取地主顺时针顺序的玩家列表
+    const orderedPlayers = getLandlordClockwiseOrder()
+    
+    // 重置倍数信息，从地主开始（顺时针第一个）
     gameState.value.multiplierInfo = {
-      currentPlayerId: gameState.value.players[0].id, // 从第一个玩家开始
+      currentPlayerId: orderedPlayers[0].id, // 从地主开始
       multiplier: 1,
       decisions: [],
       completedPlayers: []
@@ -948,11 +979,13 @@ export const useGameStore = defineStore('game', () => {
   // 进入下一个需要倍数决策的玩家（智能跳过已决策的玩家）
   const proceedToNextMultiplier = () => {
     const multiplierInfo = gameState.value.multiplierInfo
-    const currentIndex = gameState.value.players.findIndex(p => p.id === multiplierInfo.currentPlayerId)
+    const orderedPlayers = getLandlordClockwiseOrder()
+    const currentIndex = orderedPlayers.findIndex(p => p.id === multiplierInfo.currentPlayerId)
     
     console.log('🔄 proceedToNextMultiplier 开始:')
     console.log(`  - 当前玩家索引: ${currentIndex}`)
     console.log(`  - 已做决策的玩家:`, multiplierInfo.decisions.map(d => `${d.playerName}:${d.action}`))
+    console.log(`  - 地主顺时针顺序:`, orderedPlayers.map(p => p.name).join(' → '))
     
     if (currentIndex === -1) {
       console.error('🚨 proceedToNextMultiplier: 找不到当前玩家')
@@ -960,25 +993,25 @@ export const useGameStore = defineStore('game', () => {
     }
     
     // 检查是否所有玩家都已经做出决策
-    if (multiplierInfo.decisions.length >= gameState.value.players.length) {
+    if (multiplierInfo.decisions.length >= orderedPlayers.length) {
       console.log('🔄 所有玩家已完成倍数决策，开始出牌阶段')
       startPlayingPhase()
       return
     }
     
-    // 寻找下一个需要做倍数决策的玩家
-    let nextIndex = (currentIndex + 1) % gameState.value.players.length
+    // 寻找下一个需要做倍数决策的玩家（按地主顺时针顺序）
+    let nextIndex = (currentIndex + 1) % orderedPlayers.length
     let attempts = 0
-    const maxAttempts = gameState.value.players.length
+    const maxAttempts = orderedPlayers.length
     
     while (attempts < maxAttempts) {
-      const nextPlayer = gameState.value.players[nextIndex]
+      const nextPlayer = orderedPlayers[nextIndex]
       
       // 检查这个玩家是否已经做过倍数决策
       const hasDecision = multiplierInfo.decisions.some(d => d.playerId === nextPlayer.id)
       if (hasDecision) {
         console.log(`🔄 跳过已做倍数决策的玩家: ${nextPlayer.name}`)
-        nextIndex = (nextIndex + 1) % gameState.value.players.length
+        nextIndex = (nextIndex + 1) % orderedPlayers.length
         attempts++
         continue
       }
@@ -1310,7 +1343,9 @@ export const useGameStore = defineStore('game', () => {
       if (gameState.value.biddingInfo.phase === 'grabbing') {
         const callerId = gameState.value.biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
         if (callerId === player.id) {
-          console.error(`🚨 AI ${player.name} 是叫地主的玩家，在抢地主阶段不应该再次决策`)
+          console.error(`🚨 ${player.name} 是叫地主的玩家，在抢地主阶段不应该再次决策`)
+          // 如果是叫地主的玩家，直接进入下一个玩家
+          proceedToNextBidder()
           return
         }
       }
