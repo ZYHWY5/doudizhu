@@ -2097,11 +2097,10 @@ export const useGameStore = defineStore('game', () => {
         biddingInfo.landlordCandidateId = playerId
         biddingInfo.phase = 'grabbing'
         
-        // 🔍 抢地主阶段：从叫地主玩家的下家开始
-        const orderedPlayers = getBiddingClockwiseOrder()
-        const callerIndex = orderedPlayers.findIndex(p => p.id === playerId)
-        const nextPlayerIndex = (callerIndex + 1) % orderedPlayers.length
-        const nextPlayer = orderedPlayers[nextPlayerIndex]
+        // 🔍 抢地主阶段：从叫地主玩家的下家开始（使用固定的玩家顺序）
+        const callerIndex = gameState.value.players.findIndex(p => p.id === playerId)
+        const nextPlayerIndex = (callerIndex + 1) % gameState.value.players.length
+        const nextPlayer = gameState.value.players[nextPlayerIndex]
         
         console.log(`🔄 ${player?.name} 叫地主，进入抢地主阶段`)
         console.log(`🔄 抢地主从叫地主玩家的下家开始: ${nextPlayer.name}(${nextPlayer.position === 'right' ? '右边下家' : nextPlayer.position === 'left' ? '左边上家' : '底部真人'})`)
@@ -2179,18 +2178,22 @@ export const useGameStore = defineStore('game', () => {
     const biddingInfo = gameState.value.biddingInfo
     
     // 获取当前阶段的正确顺序
-    const orderedPlayers = getBiddingClockwiseOrder()
+    let orderedPlayers: Player[]
+    if (biddingInfo.phase === 'grabbing') {
+      // 抢地主阶段：使用固定的玩家数组顺序
+      orderedPlayers = gameState.value.players
+    } else {
+      // 叫地主阶段：使用叫地主顺时针顺序
+      orderedPlayers = getBiddingClockwiseOrder()
+    }
     let currentIndex = orderedPlayers.findIndex(p => p.id === biddingInfo.currentBidderId)
     
     console.log('🔄 proceedToNextBidder 开始:')
     console.log(`  - 当前阶段: ${biddingInfo.phase}`)
     console.log(`  - 当前玩家索引: ${currentIndex}`)
+    console.log(`  - 玩家顺序 (${biddingInfo.phase === 'grabbing' ? '固定数组' : '叫地主顺时针'}):`, 
+      orderedPlayers.map((p, i) => `[${i}]${p.name}(${p.position})`).join(' → '))
     console.log(`  - 已有决策:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
-    const orderDesc = orderedPlayers.map(p => {
-      const pos = p.position === 'bottom' ? '底部真人' : p.position === 'right' ? '右边下家' : '左边上家'
-      return `${p.name}(${pos})`
-    }).join(' → ')
-    console.log(`  - 叫地主顺时针顺序: ${orderDesc}`)
     
     if (currentIndex === -1) {
       console.error('🚨 proceedToNextBidder: 找不到当前玩家，强制重新洗牌')
