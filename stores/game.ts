@@ -802,11 +802,46 @@ export const useGameStore = defineStore('game', () => {
     }
   }
   
+  // 获取叫地主阶段的顺时针顺序（从起始玩家开始）
+  const getBiddingClockwiseOrder = (): Player[] => {
+    if (gameState.value.phase !== 'bidding') {
+      return gameState.value.players
+    }
+    
+    // 在叫地主阶段，找到第一个叫地主的玩家作为起始点
+    const biddingInfo = gameState.value.biddingInfo
+    if (biddingInfo.bids.length === 0) {
+      // 如果还没有任何决策，按原始顺序
+      return gameState.value.players
+    }
+    
+    // 找到第一个做决策的玩家（起始玩家）
+    const firstBidderId = biddingInfo.bids[0]?.playerId
+    if (!firstBidderId) {
+      return gameState.value.players
+    }
+    
+    const startIndex = gameState.value.players.findIndex(p => p.id === firstBidderId)
+    if (startIndex === -1) {
+      return gameState.value.players
+    }
+    
+    // 从起始玩家开始，按顺时针顺序排列
+    const orderedPlayers = []
+    for (let i = 0; i < gameState.value.players.length; i++) {
+      const index = (startIndex + i) % gameState.value.players.length
+      orderedPlayers.push(gameState.value.players[index])
+    }
+    
+    console.log('🔄 叫地主顺时针顺序:', orderedPlayers.map(p => p.name).join(' → '))
+    return orderedPlayers
+  }
+
   // 获取地主顺时针的玩家顺序
   const getLandlordClockwiseOrder = (): Player[] => {
     if (!gameState.value.landlordId) {
-      // 如果还没有地主，按原始顺序
-      return gameState.value.players
+      // 如果还没有地主，使用叫地主阶段的顺序
+      return getBiddingClockwiseOrder()
     }
     
     const landlordIndex = gameState.value.players.findIndex(p => p.id === gameState.value.landlordId)
@@ -2115,12 +2150,16 @@ export const useGameStore = defineStore('game', () => {
   // 进入下一个叫地主/抢地主的玩家
   const proceedToNextBidder = () => {
     const biddingInfo = gameState.value.biddingInfo
-    const currentIndex = gameState.value.players.findIndex(p => p.id === biddingInfo.currentBidderId)
+    
+    // 获取当前阶段的正确顺序
+    const orderedPlayers = getBiddingClockwiseOrder()
+    const currentIndex = orderedPlayers.findIndex(p => p.id === biddingInfo.currentBidderId)
     
     console.log('🔄 proceedToNextBidder 开始:')
     console.log(`  - 当前阶段: ${biddingInfo.phase}`)
     console.log(`  - 当前玩家索引: ${currentIndex}`)
     console.log(`  - 已有决策:`, biddingInfo.bids.map(b => `${gameState.value.players.find(p => p.id === b.playerId)?.name}:${b.bid}`))
+    console.log(`  - 叫地主顺时针顺序:`, orderedPlayers.map(p => p.name).join(' → '))
     
     if (currentIndex === -1) {
       console.error('🚨 proceedToNextBidder: 找不到当前玩家，强制重新洗牌')
@@ -2131,7 +2170,7 @@ export const useGameStore = defineStore('game', () => {
     // 在抢地主阶段，需要特殊处理
     if (biddingInfo.phase === 'grabbing') {
       const callerId = biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
-      const otherPlayers = gameState.value.players.filter(p => p.id !== callerId)
+      const otherPlayers = orderedPlayers.filter(p => p.id !== callerId)
       const grabPhaseDecisions = biddingInfo.bids.filter(bid => 
         bid.playerId !== callerId && (bid.bid === 'grab' || bid.bid === 'pass')
       )
@@ -2148,18 +2187,18 @@ export const useGameStore = defineStore('game', () => {
         return
       }
       
-      // 寻找下一个需要做抢地主决策的玩家
-      let nextIndex = (currentIndex + 1) % gameState.value.players.length
+      // 寻找下一个需要做抢地主决策的玩家（按叫地主顺时针顺序）
+      let nextIndex = (currentIndex + 1) % orderedPlayers.length
       let attempts = 0
-      const maxAttempts = gameState.value.players.length
+      const maxAttempts = orderedPlayers.length
       
       while (attempts < maxAttempts) {
-        const nextPlayer = gameState.value.players[nextIndex]
+        const nextPlayer = orderedPlayers[nextIndex]
         
         // 跳过叫地主的玩家
         if (nextPlayer.id === callerId) {
           console.log(`🔄 跳过叫地主的玩家: ${nextPlayer.name}`)
-          nextIndex = (nextIndex + 1) % gameState.value.players.length
+          nextIndex = (nextIndex + 1) % orderedPlayers.length
           attempts++
           continue
         }
@@ -2168,7 +2207,7 @@ export const useGameStore = defineStore('game', () => {
         const hasDecision = grabPhaseDecisions.some(d => d.playerId === nextPlayer.id)
         if (hasDecision) {
           console.log(`🔄 跳过已做决策的玩家: ${nextPlayer.name}`)
-          nextIndex = (nextIndex + 1) % gameState.value.players.length
+          nextIndex = (nextIndex + 1) % orderedPlayers.length
           attempts++
           continue
         }
@@ -2186,13 +2225,13 @@ export const useGameStore = defineStore('game', () => {
       return
     }
     
-    // 叫地主阶段的正常处理
-    const nextIndex = (currentIndex + 1) % gameState.value.players.length
-    const nextPlayer = gameState.value.players[nextIndex]
+    // 叫地主阶段的正常处理（按叫地主顺时针顺序）
+    const nextIndex = (currentIndex + 1) % orderedPlayers.length
+    const nextPlayer = orderedPlayers[nextIndex]
     const oldCurrentBidderId = biddingInfo.currentBidderId
     biddingInfo.currentBidderId = nextPlayer.id
     
-    console.log(`🔄 proceedToNextBidder: 从 ${gameState.value.players[currentIndex].name} 切换到 ${nextPlayer.name}`)
+    console.log(`🔄 proceedToNextBidder: 从 ${orderedPlayers[currentIndex].name} 切换到 ${nextPlayer.name}`)
     console.log(`  - 旧的currentBidderId: ${oldCurrentBidderId}`)
     console.log(`  - 新的currentBidderId: ${biddingInfo.currentBidderId}`)
     
