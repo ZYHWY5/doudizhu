@@ -2036,6 +2036,65 @@ export const useGameStore = defineStore('game', () => {
       return
     }
     
+    // 在抢地主阶段，需要特殊处理
+    if (biddingInfo.phase === 'grabbing') {
+      const callerId = biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
+      const otherPlayers = gameState.value.players.filter(p => p.id !== callerId)
+      const grabPhaseDecisions = biddingInfo.bids.filter(bid => 
+        bid.playerId !== callerId && (bid.bid === 'grab' || bid.bid === 'pass')
+      )
+      
+      console.log('🔄 抢地主阶段检查:')
+      console.log(`  - 叫地主玩家: ${callerId}`)
+      console.log(`  - 需要抢地主的玩家: ${otherPlayers.map(p => p.name).join(', ')}`)
+      console.log(`  - 已做决策的玩家: ${grabPhaseDecisions.map(d => gameState.value.players.find(p => p.id === d.playerId)?.name + ':' + d.bid).join(', ')}`)
+      
+      // 如果所有需要抢地主的玩家都已经决策完毕，直接确定地主
+      if (grabPhaseDecisions.length >= otherPlayers.length) {
+        console.log('🔄 所有玩家已完成抢地主决策，确定地主:', biddingInfo.landlordCandidateId)
+        confirmLandlord(biddingInfo.landlordCandidateId!)
+        return
+      }
+      
+      // 寻找下一个需要做抢地主决策的玩家
+      let nextIndex = (currentIndex + 1) % gameState.value.players.length
+      let attempts = 0
+      const maxAttempts = gameState.value.players.length
+      
+      while (attempts < maxAttempts) {
+        const nextPlayer = gameState.value.players[nextIndex]
+        
+        // 跳过叫地主的玩家
+        if (nextPlayer.id === callerId) {
+          console.log(`🔄 跳过叫地主的玩家: ${nextPlayer.name}`)
+          nextIndex = (nextIndex + 1) % gameState.value.players.length
+          attempts++
+          continue
+        }
+        
+        // 检查这个玩家是否已经做过抢地主决策
+        const hasDecision = grabPhaseDecisions.some(d => d.playerId === nextPlayer.id)
+        if (hasDecision) {
+          console.log(`🔄 跳过已做决策的玩家: ${nextPlayer.name}`)
+          nextIndex = (nextIndex + 1) % gameState.value.players.length
+          attempts++
+          continue
+        }
+        
+        // 找到了需要做决策的玩家
+        console.log(`🔄 找到下一个需要抢地主决策的玩家: ${nextPlayer.name}`)
+        biddingInfo.currentBidderId = nextPlayer.id
+        turnTimeLeft.value = settings.value.autoPlayTimeout
+        return
+      }
+      
+      // 如果循环了一圈都没找到，说明所有人都决策完了
+      console.log('🔄 循环检查后，所有玩家都已完成抢地主决策')
+      confirmLandlord(biddingInfo.landlordCandidateId!)
+      return
+    }
+    
+    // 叫地主阶段的正常处理
     const nextIndex = (currentIndex + 1) % gameState.value.players.length
     const nextPlayer = gameState.value.players[nextIndex]
     const oldCurrentBidderId = biddingInfo.currentBidderId
@@ -2044,22 +2103,6 @@ export const useGameStore = defineStore('game', () => {
     console.log(`🔄 proceedToNextBidder: 从 ${gameState.value.players[currentIndex].name} 切换到 ${nextPlayer.name}`)
     console.log(`  - 旧的currentBidderId: ${oldCurrentBidderId}`)
     console.log(`  - 新的currentBidderId: ${biddingInfo.currentBidderId}`)
-    
-    // 在抢地主阶段，添加额外的循环检测
-    if (biddingInfo.phase === 'grabbing') {
-      const callerId = biddingInfo.bids.find(bid => bid.bid === 'call')?.playerId
-      const otherPlayers = gameState.value.players.filter(p => p.id !== callerId)
-      const grabPhaseDecisions = biddingInfo.bids.filter(bid => 
-        bid.playerId !== callerId && (bid.bid === 'grab' || bid.bid === 'pass')
-      )
-      
-      // 如果所有需要抢地主的玩家都已经决策完毕，直接确定地主
-      if (grabPhaseDecisions.length >= otherPlayers.length) {
-        console.log('proceedToNextBidder: 检测到所有玩家已完成抢地主决策，确定地主')
-        confirmLandlord(biddingInfo.landlordCandidateId!)
-        return
-      }
-    }
     
     // 重置回合计时器（保持托管状态）
     turnTimeLeft.value = settings.value.autoPlayTimeout
