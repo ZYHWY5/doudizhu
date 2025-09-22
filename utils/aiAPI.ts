@@ -236,10 +236,48 @@ class GroqAIService {
 
   private parseResponse(response: string): AIDecisionResponse {
     try {
-      // 尝试解析JSON响应
-      const jsonMatch = response.match(/\{.*\}/s)
+      console.log('🤖 原始AI响应:', response)
+      
+      // 尝试多种方式提取JSON
+      let jsonStr = ''
+      
+      // 方式1: 寻找完整的JSON对象
+      const jsonMatch = response.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s)
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0])
+        jsonStr = jsonMatch[0]
+      } else {
+        // 方式2: 寻找```json代码块
+        const codeBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/)
+        if (codeBlockMatch) {
+          jsonStr = codeBlockMatch[1].trim()
+        } else {
+          // 方式3: 寻找任何包含decision的JSON片段
+          const decisionMatch = response.match(/"decision"\s*:\s*"([^"]+)"/i)
+          if (decisionMatch) {
+            const decision = decisionMatch[1]
+            const confidenceMatch = response.match(/"confidence"\s*:\s*([0-9.]+)/i)
+            const confidence = confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.5
+            
+            return {
+              decision,
+              confidence,
+              reasoning: '从AI响应中提取的决策',
+            }
+          }
+        }
+      }
+      
+      if (jsonStr) {
+        // 清理可能的格式问题
+        jsonStr = jsonStr
+          .replace(/,\s*}/g, '}')  // 移除末尾多余的逗号
+          .replace(/,\s*]/g, ']')  // 移除数组末尾多余的逗号
+          .replace(/\n/g, ' ')     // 移除换行符
+          .trim()
+        
+        console.log('🤖 提取的JSON:', jsonStr)
+        const parsed = JSON.parse(jsonStr)
+        
         return {
           decision: parsed.decision || 'pass',
           confidence: parsed.confidence || 0.5,
@@ -248,9 +286,11 @@ class GroqAIService {
       }
     } catch (error) {
       console.error('🤖 AI响应解析失败:', error)
+      console.error('🤖 原始响应:', response)
     }
 
     // 解析失败时的回退逻辑
+    console.warn('🤖 使用回退决策: pass')
     return {
       decision: 'pass',
       confidence: 0.3,
@@ -407,28 +447,48 @@ export const getAPIUsage = async (): Promise<{ used: number; limit: number } | n
 
 // 本地规则AI回退
 export const getLocalAIDecision = (context: AIDecisionContext): AIDecisionResponse => {
-  const { phase, personality } = context
+  const { phase, personality, biddingHistory } = context
   const personalityConfig = AI_PERSONALITIES[personality]
   
+  console.log('🤖 本地AI决策 - 阶段:', phase, '个性:', personality, '叫地主历史:', biddingHistory)
+  
   if (phase === 'bidding') {
-    const shouldBid = Math.random() < personalityConfig.bidProbability
-    return {
-      decision: shouldBid ? 'call' : 'pass',
-      confidence: 0.6,
-      reasoning: `基于${personalityConfig.name}特征的本地决策`
+    // 检查是否有人已经叫地主
+    const hasCall = biddingHistory.some(bid => bid.bid === 'call')
+    
+    if (!hasCall) {
+      // 叫地主阶段
+      const shouldBid = Math.random() < personalityConfig.bidProbability
+      const decision = shouldBid ? 'call' : 'pass'
+      console.log('🤖 叫地主阶段决策:', decision)
+      return {
+        decision,
+        confidence: 0.6,
+        reasoning: `基于${personalityConfig.name}特征的叫地主决策`
+      }
+    } else {
+      // 抢地主阶段
+      const shouldGrab = Math.random() < personalityConfig.bidProbability * 0.7 // 抢地主概率稍低
+      const decision = shouldGrab ? 'grab' : 'pass'
+      console.log('🤖 抢地主阶段决策:', decision)
+      return {
+        decision,
+        confidence: 0.5,
+        reasoning: `基于${personalityConfig.name}特征的抢地主决策`
+      }
     }
   } else if (phase === 'multiplier') {
     const shouldDouble = Math.random() < personalityConfig.doubleProbability
     return {
       decision: shouldDouble ? 'double' : 'pass',
       confidence: 0.5,
-      reasoning: `基于${personalityConfig.name}特征的本地决策`
+      reasoning: `基于${personalityConfig.name}特征的倍数决策`
     }
   }
   
   return {
     decision: 'pass',
     confidence: 0.4,
-    reasoning: '本地规则AI决策'
+    reasoning: '本地规则AI默认决策'
   }
 }
