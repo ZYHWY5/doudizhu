@@ -2067,6 +2067,21 @@ export const useGameStore = defineStore('game', () => {
       })
     }
     
+    // 🚨 额外验证：在叫地主阶段，如果已经有人叫地主了，其他人不能再叫地主
+    if (biddingInfo.phase === 'calling' && bidType === 'call') {
+      const hasCall = biddingInfo.bids.some(bid => bid.bid === 'call')
+      if (hasCall) {
+        console.error(`🚨 已经有人叫地主了，${player?.name} 不能再叫地主`)
+        return
+      }
+    }
+    
+    // 🚨 额外验证：在抢地主阶段，不能选择"叫地主"
+    if (biddingInfo.phase === 'grabbing' && bidType === 'call') {
+      console.error(`🚨 现在是抢地主阶段，${player?.name} 不能叫地主，只能抢地主或不抢`)
+      return
+    }
+    
     // 记录叫地主/抢地主
     biddingInfo.bids.push({
       playerId,
@@ -2076,6 +2091,7 @@ export const useGameStore = defineStore('game', () => {
     
     // 处理叫地主阶段
     if (biddingInfo.phase === 'calling') {
+      
       if (bidType === 'call') {
         // 有人叫地主，设为候选人，进入抢地主阶段
         biddingInfo.landlordCandidateId = playerId

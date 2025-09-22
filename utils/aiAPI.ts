@@ -116,7 +116,12 @@ class GroqAIService {
 `
 
     if (phase === 'bidding') {
-      prompt += `请决定是否叫地主。选项: "call"(叫地主), "pass"(不叫), "grab"(抢地主)
+      // 检查是否已经有人叫地主
+      const hasCall = context.biddingHistory.some(bid => bid.bid === 'call')
+      
+      if (!hasCall) {
+        // 叫地主阶段
+        prompt += `【叫地主阶段】请决定是否叫地主。选项: "call"(叫地主), "pass"(不叫)
 
 【分析要点】
 1. 牌力分析：统计大牌(A/2/王)、炸弹、三张、对子数量
@@ -124,7 +129,19 @@ class GroqAIService {
 3. 控制力：能否压制其他玩家的出牌
 4. 个性匹配：根据AI个性调整风险偏好
 
-请返回JSON格式: {"decision": "call/pass/grab", "confidence": 0.8, "reasoning": "基于斗地主规则的专业分析"}`
+请返回JSON格式: {"decision": "call/pass", "confidence": 0.8, "reasoning": "基于斗地主规则的专业分析"}`
+      } else {
+        // 抢地主阶段
+        prompt += `【抢地主阶段】已经有人叫地主，请决定是否抢地主。选项: "grab"(抢地主), "pass"(不抢)
+
+【分析要点】
+1. 牌力分析：你的牌力是否足够强过叫地主的玩家
+2. 牌型组合：是否有足够的控制牌和强牌型
+3. 风险评估：抢地主需要承担更大责任
+4. 个性匹配：根据AI个性调整抢地主的积极性
+
+请返回JSON格式: {"decision": "grab/pass", "confidence": 0.8, "reasoning": "基于斗地主规则的专业分析"}`
+      }
     } else if (phase === 'multiplier') {
       prompt += `请决定是否加倍。选项: "double"(加倍), "pass"(不加倍)
 考虑因素:
